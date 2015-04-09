@@ -91,6 +91,8 @@ public class MainActivity extends Activity {
             	
             	benchBuddies.put(extras.getString("REMOTE_ADDR"), newBuddy);
             	
+            	setBanner("connected");
+            	
             }
             
             // remove this peer from our map
@@ -213,15 +215,18 @@ public class MainActivity extends Activity {
 	
 	public void handleButtonLook(View view) {
 		simpBleService.LookAround(5000);
+		setBanner("looking around");
 	}
 	
 	public void handleButtonAdvertise(View view) {
 		if (btnAdvertise.getText().toString().equalsIgnoreCase("SHOW")) {
 			btnAdvertise.setText("HIDE");
 			simpBleService.ShowYourself();
+			setBanner("advertising");
 		} else {
 			btnAdvertise.setText("SHOW");
 			simpBleService.HideYourself();
+			setBanner("hidden");
 		}
 
 	}

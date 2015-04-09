@@ -62,13 +62,10 @@ public class BleService extends Service {
     	return result;
     }
     
-    
-    
     public void LookAround(int ms) {
     	bleMessenger.ScanForPeers(ms);
     	
     }
-    
     
     //TODO: maybe better here to check if we're currently advertising?
     public void ShowYourself() {

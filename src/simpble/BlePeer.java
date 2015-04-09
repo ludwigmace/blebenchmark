@@ -69,18 +69,13 @@ public class BlePeer {
 		lastActivity = new Date();
 	}
 	
-	public boolean CheckStale() {
-		boolean isStale = false;
+	public long CheckStale() {
 		
 		Date rightnow = new Date();
 		
 		long diff = rightnow.getTime() - lastActivity.getTime();
-		
-		if (diff > (1000 * 10)) { // if we're over 10 seconds of stale time
-			isStale = true;
-		}
-		
-		return isStale;
+
+		return diff;
 	}
 	
 	
