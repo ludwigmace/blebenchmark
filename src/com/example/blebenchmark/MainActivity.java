@@ -9,12 +9,6 @@ import java.util.Map;
 import com.google.common.io.ByteStreams;
 import com.google.common.primitives.Bytes;
 
-
-
-
-
-
-
 import simpble.ByteUtilities;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
@@ -32,6 +26,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.RadioButton;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -46,10 +41,18 @@ public class MainActivity extends Activity {
 	RadioButton btnNotify;
 	RadioButton btnIndicate;
 	
+	Spinner spinMessageSize;
+	
+	TextView startReceive;
+	TextView stopReceive;
+	TextView messageDetails;
+	
     private BleService simpBleService;
     private String peripheralTransportMode;
 
     private Map<String, BenchBuddy> benchBuddies;
+    
+    private long MessageSize;
     
     // Code to manage Service lifecycle, from android le gatt sample
     private final ServiceConnection mServiceConnection = new ServiceConnection() {
@@ -98,6 +101,8 @@ public class MainActivity extends Activity {
     			
     			setBanner("fully received msg of " + String.valueOf(payload.length));
     			
+    			stopReceive.setText("stop recv:" + String.valueOf(System.currentTimeMillis()));
+    			
             }
             
             if (action == BleService.INCOMPLETE_SEND) {
@@ -144,6 +149,10 @@ public class MainActivity extends Activity {
                 	BenchBuddy b = benchBuddies.get(extras.getString("REMOTE_ADDR"));
                 	b.benchMessages.append(parent_msgid, m);
                 	
+                	messageDetails.setText("incoming (" + parent_msgid + ") of size " + (packets * 17));
+                	startReceive.setText("start recv:" + String.valueOf(m.MillisecondStart));
+                	stopReceive.setText("waiting . . .");
+                	
                 	setBanner("msg " + messageHash + " - " + String.valueOf(packets) + " packets");
                 } else {
                 	setBanner("new msg, extras null");
@@ -179,8 +188,15 @@ public class MainActivity extends Activity {
 		btnNotify = (RadioButton) findViewById(R.id.radio_notify);
 		btnIndicate = (RadioButton) findViewById(R.id.radio_indicate);
 		
+		
+		startReceive = (TextView) findViewById(R.id.msg_start_receive);
+		stopReceive = (TextView) findViewById(R.id.msg_stop_receive);
+		messageDetails = (TextView) findViewById(R.id.msg_details);
+		
         Intent simpBleIntent = new Intent(this, BleService.class);
         bindService(simpBleIntent, mServiceConnection, BIND_AUTO_CREATE);
+        
+        spinMessageSize = (Spinner) findViewById(R.id.msg_size);
         
         // get an identifier for this installation
         String myIdentifier = Installation.id(this, false);
@@ -322,16 +338,37 @@ public class MainActivity extends Activity {
 	
 	public void handleButtonSend(View v) {
 	
-		byte[] newMsg = GenerateMessage(3000);
+		String msgSize = String.valueOf(spinMessageSize.getSelectedItem());
 		
-		String remoteAddress = benchBuddies.keySet().iterator().next();
+		String msgUnits = msgSize.substring(msgSize.length()-2);
+		int msgUnitCount = Integer.parseInt(msgSize.substring(0, msgSize.length()-3));
 		
-		String result = simpBleService.SendMessage(remoteAddress, newMsg);
+		int byteSize = 0;
 		
-		if (result == null) {
-			Log.v(TAG, "no message queued to send");
+		if (msgUnits.equalsIgnoreCase("MB")) {
+			byteSize = msgUnitCount * 1000000;
+		} else if (msgUnits.equalsIgnoreCase("kB")) {
+			byteSize = msgUnitCount * 1000;
+		} else if (msgUnits.equalsIgnoreCase("hB")) {
+			byteSize = msgUnitCount * 100;
+		}
+		
+		if (byteSize > 0) {
+		
+			byte[] newMsg = GenerateMessage(byteSize);
+			
+			String remoteAddress = benchBuddies.keySet().iterator().next();
+			
+			String result = simpBleService.SendMessage(remoteAddress, newMsg);
+			
+			if (result == null) {
+				Log.v(TAG, "no message queued to send");
+			} else {
+				Log.v(TAG, "message queued to send w/ id " + result);
+			}
+		
 		} else {
-			Log.v(TAG, "message queued to send w/ id " + result);
+			Log.v(TAG, "byte size 0");
 		}
 		
 	}

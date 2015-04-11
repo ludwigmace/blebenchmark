@@ -56,7 +56,8 @@
         <LinearLayout 
     android:id="@+id/test_parameters" 
     android:layout_height="wrap_content" 
-    android:layout_width="fill_parent">
+    android:layout_width="fill_parent"
+    android:orientation="vertical">
 	    
             <RadioGroup
                 android:layout_width="fill_parent"
@@ -77,8 +78,43 @@
                 
                 
             </RadioGroup>
-	    
             
+        <Spinner
+            android:id="@+id/msg_size"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:entries="@array/msg_size"
+            android:prompt="@string/prompt_msg_size" />
+	        
 	    </LinearLayout>
+	    
+    <LinearLayout 
+    android:id="@+id/bench_output" 
+    android:layout_height="wrap_content" 
+    android:layout_width="fill_parent"
+    android:orientation="vertical"
+    >
+
+	    <TextView
+	        android:id="@+id/msg_details"
+	        android:layout_width="match_parent"
+	        android:layout_height="wrap_content"
+	        android:text="-- message details --" />
+        
+        
+	    <TextView
+	        android:id="@+id/msg_start_receive"
+	        android:layout_width="match_parent"
+	        android:layout_height="wrap_content"
+	        android:text="-- message start receive --" />
+	    
+	    <TextView
+	        android:id="@+id/msg_stop_receive"
+	        android:layout_width="match_parent"
+	        android:layout_height="wrap_content"
+	        android:text="-- message stop receive --" />
+
+    </LinearLayout>
+        
     
 </LinearLayout>

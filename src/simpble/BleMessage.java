@@ -6,8 +6,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 
+
 import android.util.Log;
 import android.util.SparseArray;
+import android.util.SparseIntArray;
 
 import com.google.common.primitives.Bytes;
 
@@ -84,6 +86,29 @@ public class BleMessage {
 	//  returns all the pending BlePackets that make up this message
 	public SparseArray<BlePacket> GetPendingPackets() {
 		return pendingPackets;
+	}
+	
+	public boolean PacketReQueue(SparseIntArray s) {
+		boolean success = true;
+		
+		for (int i=0; i < s.size(); i++) {
+			int start = s.keyAt(i);
+			int offset = s.valueAt(i);
+			
+			for (int x=start; x <= (start+offset); x++) {
+				BlePacket p = null;
+				Log.v(TAG, "requeue packet " + x);
+				
+				p = messagePackets.get(x);
+				
+				pendingPackets.put(x, p);
+			}
+			
+
+		}
+		
+		return success;
+		
 	}
 	
 	public boolean PacketReQueue(int i) {
@@ -293,14 +318,12 @@ public class BleMessage {
 	
 
 	// make sure all the packets are there, and in the right order
-	public ArrayList<Integer> GetMissingPackets() {
+	public SparseIntArray GetMissingPackets() {
 		
 		ArrayList<Integer> l;
-		ArrayList<Integer> missing;
 		
 		l = new ArrayList<Integer>();
-		missing = new ArrayList<Integer>();
-		
+
 		// add the message sequence for each packet in the msg packets into a list
 		// this will write these packets out in order
 		for (int i = 0; i < messagePackets.size(); i++) {
@@ -310,16 +333,28 @@ public class BleMessage {
 			l.add(b.MessageSequence);
 		}
 
+		SparseIntArray rangeMissing = new SparseIntArray();
+		
+		int x = 0;
+		int y = 0;
 		// search the list for every packet
 		for (int i = 0; i <= BlePacketCount; i++) {
+			// if you're missing a packet
 			if (!l.contains(i)) {
-				missing.add(i);
-				Log.v(TAG, "missing packet #" + String.valueOf(i));
+				
+				// if we've already started counting and the accrual is contiguous
+				if ((y == i - 1) && (i - x <= 255)) {
+					y = i;
+					rangeMissing.put(x, i - x);
+				} else if (x < i) { // start of new missing range
+					y = i;
+					x = i;
+					rangeMissing.put(x, 0);
+				}
 			}
 		}
 		
-
-		return missing;
+		return rangeMissing;
 	}
 	
 	public byte[] GetAllBytes() {

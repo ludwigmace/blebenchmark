@@ -34,7 +34,7 @@ public interface BleStatusCallback {
 	public void peerConnectionStatus(String remoteAddress, int ConnectionStatus);
 		
 	/**
-	 * Callback executed when the first packet of a new message is being sent from a peer
+	 * Callback executed when the first packet of a new message is being received from a peer
 	 * 
 	 * @param remoteAddress Bluetooth address (just used as an index, could be anything) of the now-disconnected peer
 	 * @param messageId a truncated hash of the incoming message

@@ -10,6 +10,8 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
 
+import com.google.common.primitives.Bytes;
+
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
@@ -19,6 +21,7 @@ import android.content.Context;
 import android.os.Build;
 import android.util.Log;
 import android.util.SparseArray;
+import android.util.SparseIntArray;
 
 public class BleMessenger {
 	private static String TAG = "BLEM";
@@ -669,7 +672,8 @@ public class BleMessenger {
 			bleStatusCallback.headsUp("m: bleMessage found at index " + String.valueOf(msg_id));
 
 			// how many missing packets?  if 0, we're all set; call it done
-	    	int missing_packet_count = incomingBytes[1] & 0xFF;
+	    	int missing_packet_count = incomingBytes[1] & 0xFF << 8 | (incomingBytes[2] & 0xFF);
+	    	Log.v(TAG, "missing packet count:" + missing_packet_count);
 	    	
 	    	// if we're all done, mark this message sent
 	    	if (missing_packet_count == 0) {
@@ -688,24 +692,33 @@ public class BleMessenger {
 	    		Log.v(TAG, "msg " + String.valueOf(msg_id) + " not sent, checking missing packets");
 	    		
 	    		// read the missing packet numbers into an array
-	    		byte[] missingPackets = Arrays.copyOfRange(incomingBytes, 2, incomingBytes.length);
-	    		bleStatusCallback.headsUp("m: " + String.valueOf(missingPackets.length) + " packet(s) didn't make it");
-	    		int i = 0;
-	    		for (byte b: missingPackets) {
-	    			int missing_packet = b & 0xFF;
-	    			Log.v(TAG, "re-queuing packet #" + String.valueOf(missing_packet));
-	    			try {
-	    				if (m.PacketReQueue(missing_packet)) {
-	    					i++;
-	    				}
-	    			} catch (Exception x) {
-	    				bleStatusCallback.headsUp("m: error calling BleMessage.PacketRequeue(" + String.valueOf(missing_packet) + ")");
-	    				Log.v(TAG, x.getMessage());
-	    			}
+	    		byte[] missingPackets = Arrays.copyOfRange(incomingBytes, 3, incomingBytes.length);
+
+	    		Log.v(TAG, "missing packets bytes: " + ByteUtilities.bytesToHex(missingPackets));
+	    		
+	    		SparseIntArray s = new SparseIntArray();
+	    		int packet_requeue_count = 0;
+	    		// at most we can have 5 triplets of ranges
+	    		for (int i = 0; i < 5; i++) {
+		    		int missingOffset = (missingPackets[i] & 0xFF) << 8 | (missingPackets[i+1] & 0xFF);
+		    		
+		    		int missingCount = (byte)missingPackets[i+2] & 0xFF;
+		    		
+		    		Log.v(TAG, "from packet " + missingOffset + " queue " + missingCount);
+		    		
+		    		packet_requeue_count = packet_requeue_count + missingCount;
+		    		
+		    		if (missingOffset > 0) {
+		    			s.put(missingOffset, missingCount);
+		    		}
 	    			
 	    		}
+
 	    		
-	    		bleStatusCallback.packetsRequeued(remoteAddress, msg_id, i);
+	    		m.PacketReQueue(s);
+	    		
+
+	    		bleStatusCallback.packetsRequeued(remoteAddress, msg_id, packet_requeue_count);
 	    		
 	    		Log.v(TAG, "message now has " + String.valueOf(m.GetPendingPackets().size()) + " packets to send");
 	    		
@@ -795,6 +808,8 @@ public class BleMessenger {
 			if (remoteCharUUID.toString().equalsIgnoreCase(uuidFromBase("105").toString())) {
 				
 				byte[] missingPackets = missingPacketsForPeer(remoteAddress);
+				
+				Log.v(TAG, "missing packet delivery: " + ByteUtilities.bytesToHex(missingPackets));
 				
 				// if we still need packets
 				blePeripheral.updateCharValue(remoteAddress, remoteCharUUID, missingPackets);
@@ -944,25 +959,33 @@ public class BleMessenger {
     	
     	Log.v("CHECK", "check pending messages");
     	BlePeer p = null;
+    	boolean messageTimerSet = false;
     	
     	for (Map.Entry<String, BlePeer> entry : peerMap.entrySet()) {
     		String peerAddress = entry.getKey();
     		p = entry.getValue();
 
     		// only go through this rigamarole if you're connected as a central
-    		if (p.ConnectedAs.equalsIgnoreCase("central")) {
+    		if (p.ConnectedAs.equalsIgnoreCase("central") && p.CheckStale() > 1000) {
     		
 				byte[] ack = missingPacketsForPeer(peerAddress);
+				
+				Log.v(TAG, "missing packets delivery:" + ByteUtilities.bytesToHex(ack));
 				
 				if (ack != null) {
 					bleCentral.submitCharacteristicWriteRequest(peerAddress, uuidFromBase("105"), ack);
 					
 					// tell the remote person about this missing stuff, and then requeue
 					setupMessageStatusTimer(BUSINESS_TIMEOUT + p.CheckStale());
+					messageTimerSet = true;
 					break;
 				}
-    		}
+    		} 
 			
+    	}
+    	
+    	if (!messageTimerSet) {
+    		setupMessageStatusTimer(BUSINESS_TIMEOUT);
     	}
 
 		// in case you don't have any missing packets, still check again
@@ -981,6 +1004,8 @@ public class BleMessenger {
      */
     private byte[] missingPacketsForPeer(String remoteAddress) {
     	
+    	Log.v(TAG, "check missing packets for peer " + remoteAddress);
+    	
     	byte[] missingPackets = null;
 
 		// get the peer who just asked us if we have any incomplete messages
@@ -994,31 +1019,62 @@ public class BleMessenger {
 
 			if (!m.ReceiptAcknowledged) {
 				
-				// see if we've got any missing packets
-				ArrayList<Integer> missing = m.GetMissingPackets();
+				// see if we've got any missing packets, this returns a range; (0-65535 start, 0-255 offset)
+				SparseIntArray missing = m.GetMissingPackets();
 			
-				// create an array
-				missingPackets = new byte[missing.size()+2];
-			
+				Log.v(TAG, "# of missing ranges: " + missing.size());
+				
+				// create a byte array which will be our "we lack these" message
+				missingPackets = new byte[1];
+
 				// first byte will be message identifier
 				missingPackets[0] = Integer.valueOf(k).byteValue();
-			
-				// second byte will be number of missing packets
-				missingPackets[1] = Integer.valueOf(missing.size()).byteValue();
-			
-				// subsequent bytes are those that are missing!
-				int counter = 2;
 				
-				for (Integer i: missing) {
-					missingPackets[counter] = i.byteValue();
-					counter++;
-				}
-			
-			
-				if (missing.size() == 0) { 
+				if (missing.size() == 0) {
 					m.ReceiptAcknowledged = true;
+					missingPackets = Arrays.copyOf(missingPackets, 20);
+					break;
 				}
 				
+				missingPackets = new byte[3];
+				missingPackets[0] = Integer.valueOf(k).byteValue();
+			
+				int totalMissing = 0;
+				
+				for (int i = 0; (i < missing.size()) && i < 5; i++) {
+					totalMissing = totalMissing + missing.valueAt(i) + 1;
+					int offsetMissing = missing.keyAt(i);
+					
+					Log.v(TAG, "offset missing for index " + i + " is " + offsetMissing);
+					
+					byte[] missing_start = new byte[2];
+					
+					if (offsetMissing <= 255) {
+						missing_start[0] = (byte)0x00;
+						missing_start[1] = (byte)offsetMissing;
+					} else {
+						missing_start = ByteUtilities.intToByte(offsetMissing);
+					}
+					
+					byte[] trio = new byte[] { (byte)missing_start[0], (byte)missing_start[1], (byte)missing.valueAt(i) };
+					Log.v(TAG, "trio " + i + " is " + ByteUtilities.bytesToHex(trio));
+					
+					missingPackets = Bytes.concat(missingPackets, trio);
+					
+				}
+				
+				// second two bytes will be number of missing packets
+				byte[] missingCount = ByteUtilities.intToByte(totalMissing);
+				
+				if (missingCount.length == 1) {
+					missingPackets[1] = (byte)0x00;
+					missingPackets[2] = missingCount[0];
+				} else {
+					missingPackets[1] = missingCount[0];
+					missingPackets[2] = missingCount[1];
+				}
+			
+				missingPackets = Arrays.copyOf(missingPackets, 20);
 				break;
 			}
 		
