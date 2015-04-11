@@ -18,7 +18,7 @@
 	        android:id="@+id/banner"
 	        android:layout_width="wrap_content"
 	        android:layout_height="wrap_content"
-	        android:text="@string/hello_world" />
+	        android:text="-- status msgs show up here --" />
 
     </LinearLayout>
     
@@ -41,6 +41,7 @@
 	        android:text="SHOW"
 	        android:onClick="handleButtonAdvertise"
 	        android:enabled="true" />
+
 	    
 	    <Button
 	        android:id="@+id/send"
@@ -52,6 +53,32 @@
     
     </LinearLayout>
     
-    
+        <LinearLayout 
+    android:id="@+id/test_parameters" 
+    android:layout_height="wrap_content" 
+    android:layout_width="fill_parent">
+	    
+            <RadioGroup
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                
+                <RadioButton android:id="@+id/radio_notify"
+					android:layout_height="wrap_content" 
+    				android:layout_width="wrap_content"
+                    android:text="Notify"
+                    android:onClick="onRadioButtonClicked" />
+                
+                <RadioButton android:id="@+id/radio_indicate"
+                    android:text="Indicate"
+					android:layout_height="wrap_content" 
+    				android:layout_width="wrap_content"
+                    android:onClick="onRadioButtonClicked" />
+                
+                
+            </RadioGroup>
+	    
+            
+	    </LinearLayout>
     
 </LinearLayout>

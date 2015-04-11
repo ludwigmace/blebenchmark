@@ -53,6 +53,9 @@ public interface BleStatusCallback {
 	public void incomingPacket(String remoteAddress, int messageId, int currentPacket);
 	
 	
+	public void packetsRequeued(String remoteAddress, int messageId, int missingPacketCount);
+	
+	
 	/**
 	 * You can use this for debugging; for example in the implementation of the callback you can show messages in popups or otherwise 
 	 * @param msg

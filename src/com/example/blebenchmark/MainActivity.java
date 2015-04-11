@@ -13,6 +13,8 @@ import com.google.common.primitives.Bytes;
 
 
 
+
+
 import simpble.ByteUtilities;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
@@ -29,6 +31,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
+import android.widget.RadioButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -40,8 +43,11 @@ public class MainActivity extends Activity {
 	TextView textBanner;
 	Button btnSend;
 	Button btnAdvertise;
+	RadioButton btnNotify;
+	RadioButton btnIndicate;
 	
     private BleService simpBleService;
+    private String peripheralTransportMode;
 
     private Map<String, BenchBuddy> benchBuddies;
     
@@ -58,6 +64,8 @@ public class MainActivity extends Activity {
                 Log.e(TAG, "bluetooth problems!");
                 finish();
             } else {
+            	simpBleService.SetPeripheralTransportMode(peripheralTransportMode);
+            	
             	if (result.equalsIgnoreCase("success_adv")) {
             		btnAdvertise.setEnabled(true);
             		btnAdvertise.setText("SHOW");
@@ -81,6 +89,20 @@ public class MainActivity extends Activity {
             final String action = intent.getAction();            
             Bundle extras = intent.getExtras();
             
+            Log.v(TAG, action + " intent received");
+
+            // we've received a whole message, get its payload and the buddy who sent it
+            if (action == BleService.ACTION_MSG_RECEIVED) {
+            	BenchBuddy buddy = benchBuddies.get(extras.getString("REMOTE_ADDR"));
+    			byte[] payload = extras.getByteArray("MSG_PAYLOAD");
+    			
+    			setBanner("fully received msg of " + String.valueOf(payload.length));
+    			
+            }
+            
+            if (action == BleService.INCOMPLETE_SEND) {
+            	setBanner(extras.getString("REMOTE_ADDR") + "(" + extras.getInt("PARENT_MSG_ID") + ")"  + " lacking " + extras.getInt("MISSING_PACKETS") + " packets");
+            }
             
             // we're connected, so add this peer to our list of buddies
             if (action == BleService.ACTION_CONNECTED) {
@@ -154,6 +176,8 @@ public class MainActivity extends Activity {
 		btnSend = (Button) findViewById(R.id.send);
 		btnAdvertise = (Button) findViewById(R.id.advert);
 		
+		btnNotify = (RadioButton) findViewById(R.id.radio_notify);
+		btnIndicate = (RadioButton) findViewById(R.id.radio_indicate);
 		
         Intent simpBleIntent = new Intent(this, BleService.class);
         bindService(simpBleIntent, mServiceConnection, BIND_AUTO_CREATE);
@@ -175,26 +199,36 @@ public class MainActivity extends Activity {
 		
 		benchBuddies = new HashMap<String, BenchBuddy>();
 		
+		if (!(btnNotify.isChecked() || btnIndicate.isChecked())) {
+			btnNotify.setChecked(true);
+			peripheralTransportMode = "notify";
+		}
+		
 		
 	}
 	
     @Override
     protected void onResume() {
         super.onResume();
-        registerReceiver(simpBleReceiver, makeGattUpdateIntentFilter());
+        registerReceiver(simpBleReceiver, makeUpdateIntentFilter());
         
         if (simpBleService != null) {
             //do what we want to do after Resuming
         }
     }
 
-    private static IntentFilter makeGattUpdateIntentFilter() {
+    private static IntentFilter makeUpdateIntentFilter() {
         final IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(BleService.ACTION_CONNECTED);
         intentFilter.addAction(BleService.ACTION_DISCONNECTED);
         intentFilter.addAction(BleService.ACTION_NEGOTIATING);
         intentFilter.addAction(BleService.INCOMING_PACKET);
+        intentFilter.addAction(BleService.ACTION_MSG_RECEIVED);
         intentFilter.addAction(BleService.NEW_MESSAGE);
+        intentFilter.addAction(BleService.INCOMPLETE_SEND);
+        
+        
+        
         return intentFilter;
     }
     
@@ -211,7 +245,28 @@ public class MainActivity extends Activity {
         simpBleService = null;
     }
 	
-	
+	public void onRadioButtonClicked(View v) {
+		boolean checked = ((RadioButton) v).isChecked();
+		
+		switch(v.getId()) {
+		case R.id.radio_notify:
+			if (checked) {
+				peripheralTransportMode = "notify";
+			}
+			break;
+			
+		case R.id.radio_indicate:
+			if (checked) {
+				peripheralTransportMode = "indicate";
+			}
+			break;
+		}
+		
+		simpBleService.SetPeripheralTransportMode(peripheralTransportMode);
+		
+	}
+    
+    
 	
 	public void handleButtonLook(View view) {
 		simpBleService.LookAround(5000);
@@ -280,6 +335,7 @@ public class MainActivity extends Activity {
 		}
 		
 	}
+	
 
 	private byte[] GenerateMessage(int MessageSize) {
 		// get the lorem text from file

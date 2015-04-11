@@ -29,10 +29,12 @@ public class BleMessenger {
 	public static final int CONNECTION_CONNECTED = 1;
 	public static final int CONNECTION_NEGOTIATING = 2;
 	
-	private boolean StayingBusy;
+	private boolean CheckAck;
+	private boolean NeedSend;
 	
 	private Timer longTimer;
-	private Timer businessTimer;
+	private Timer messageStatusTimer;
+	private Timer messageSendTimer;
 	
 	// handles to the device and system's bluetooth management 
 	private BluetoothManager btMgr;
@@ -61,8 +63,13 @@ public class BleMessenger {
 	public BleMessage idMessage;
 	
 	public boolean SupportsAdvertising;
+	
+	private String peripheralTransport;
     
     private List<BleCharacteristic> serviceDef;
+    
+    private int incomingMessageCounter;
+    private int outgoingMessageCounter;
     
     /**
      * Instantiates serviceDef arraylist, peerMap, fpNetMap, creates handles for peripheral/central,
@@ -79,8 +86,11 @@ public class BleMessenger {
 		btMgr = bluetoothManager;
 		btAdptr = bluetoothAdapter;
 		ctx = context;
-		StayingBusy = true;
+		CheckAck = false;
+		NeedSend = false;
 		
+		incomingMessageCounter = 0;
+		outgoingMessageCounter = 0;
 
 		blePeripheral = null;
 		
@@ -109,21 +119,58 @@ public class BleMessenger {
 		}
 		
 		bleCentral = new BleCentral(btAdptr, ctx, centralHandler, uuidServiceBase, 3000, ScanSettings.SCAN_MODE_BALANCED);
-		
-		//serviceDef.add(new BleCharacteristic("identifier_read", uuidFromBase("100"), BleGattCharacteristics.GATT_READ));		
+				
 		serviceDef.add(new BleCharacteristic("data_write", uuidFromBase("101"), BleGattCharacteristic.GATT_WRITE));
-		//serviceDef.add(new BleCharacteristic("data_notify", uuidFromBase("102"), BleGattCharacteristic.GATT_NOTIFY));
-		serviceDef.add(new BleCharacteristic("data_indicate", uuidFromBase("102"), BleGattCharacteristic.GATT_INDICATE));
-		//serviceDef.add(new BleCharacteristic("data_write", uuidFromBase("104"), BleGattCharacteristic.GATT_WRITE));
+		serviceDef.add(new BleCharacteristic("data_notify", uuidFromBase("102"), BleGattCharacteristic.GATT_NOTIFY));
+		serviceDef.add(new BleCharacteristic("data_indicate", uuidFromBase("103"), BleGattCharacteristic.GATT_INDICATE));
 		serviceDef.add(new BleCharacteristic("data_ack", uuidFromBase("105"), BleGattCharacteristic.GATT_READWRITE));
 
+		//serviceDef.add(new BleCharacteristic("identifier_read", uuidFromBase("100"), BleGattCharacteristics.GATT_READ));
+		//serviceDef.add(new BleCharacteristic("data_write", uuidFromBase("104"), BleGattCharacteristic.GATT_WRITE));
+		
 		bleCentral.setRequiredServiceDef(serviceDef);
 		
 		//setupStaleChecker(INACTIVE_TIMEOUT);  // setup timeout
-		setupBusinessTimer(BUSINESS_TIMEOUT); // check on pending messages, or do something else every BUSINESS_TIMEOUTms interval
 		
+		peripheralTransport = "102"; // default transport to notify
 	
 		// when we connect, send the id message to the connecting party
+	}
+	
+	/**
+	 * Instructs your application to use either notify or indicate as the method that the peripheral writes to the central
+	 * 
+	 * @param Specify "notify" or "indicate"
+	 * @return returns result of GetPeripheralTransportMode
+	 */
+	public String SetPeripheralTransportMode(String Mode) {
+		
+		if (Mode.equalsIgnoreCase("indicate")) {
+			peripheralTransport = "103";
+		} else {
+			peripheralTransport = "102";
+		}
+				
+		return GetPeripheralTransportMode();
+	}
+	
+	/**
+	 * 
+	 * @return notify or indicate
+	 */
+	public String GetPeripheralTransportMode() {
+		String result = "";
+		if (peripheralTransport.equalsIgnoreCase("102")) {
+			result = "notify";
+		} else if (peripheralTransport.equalsIgnoreCase("103")) {
+			result = "indicate";
+		} else {
+			peripheralTransport = "102";
+			result = "notify";
+		}
+		
+		return result;
+		
 	}
 
 	
@@ -132,11 +179,13 @@ public class BleMessenger {
 	 * @param Peer
 	 */
 	private void sendMessagesToPeer(BlePeer p) {
-		// right here i need to catch whether or not my peer has subscribed if i am connected as a peripheral
+
+		// "touch" this peer so i don't send if i've talked to them recently
+		p.MarkActive();
 		
 		// if you're connected to this peer as a peripheral and this peer isn't subscribed to anything, then exit 
 		if (p.ConnectedAs.equalsIgnoreCase("peripheral") && p.subscribedChars.length() < 1) {
-			bleStatusCallback.headsUp("m: connected as perp, nothing is subscribed");
+			Log.v(TAG, "connected as peripheral, nothing is subscribed");
 			return;
 		}
 		
@@ -146,7 +195,8 @@ public class BleMessenger {
 			// is your peer connected as a peripheral or a central?
 			if (p.ConnectedAs.equalsIgnoreCase("central")) {
 				// if you're a central, send as such
-				bleStatusCallback.headsUp("m: you're a central and can initiate a send, congrats");
+				Log.v(TAG, "you're a central and can initiate a send, congrats");
+				
 				writeOut(p.RecipientAddress());
 			} else if (p.ConnectedAs.equalsIgnoreCase("peripheral")) {
 				// if you're a peripheral send as such
@@ -154,13 +204,13 @@ public class BleMessenger {
 				 * if you're hoping to use a notify characteristic, they'll need to be subscribed to it
 				*/
 				// how to tell if this peer is subscribed?
-				bleStatusCallback.headsUp("m: begin peripheral send to " + p.RecipientAddress());
+				Log.v(TAG, "begin peripheral send to " + p.RecipientAddress());
 
 				writeOut(p.RecipientAddress());
 				
 			}
 		} else {
-			bleStatusCallback.headsUp("m: no more messages for peer: " + p.RecipientAddress());
+			Log.v(TAG, "no more messages for peer");
 		}
 
 	}
@@ -175,36 +225,63 @@ public class BleMessenger {
 			
 			// funny, we're not actually sending a particular message per se, even though we asked for a particular message
 			// we're calling a method to send any pending messages for a particular peer
-			// mainly because we don't store the identifier for the peer in a particular BleMessage (although we could?)
-			if (m != null) {
+			// mainly because we don't store the identifier for the peer in a particular BleMessage
+			// (although we could?)
+			if (m != null && p.CheckStale() > 2000 && !p.IsConversing) {
 				Log.v("DOIT", "pulled msg #" + String.valueOf(m.GetMessageNumber()) + ", " + ByteUtilities.bytesToHex(m.PayloadDigest).substring(0,8));
 				sendMessagesToPeer(p);
+				
+				break;
 			}
-
-		}
-	}
-	
-	private synchronized void setupBusinessTimer(long youStillBusy) {
-		if (businessTimer != null) {
-			businessTimer.cancel();
-			businessTimer = null;
+			
 		}
 		
-		if (businessTimer == null && StayingBusy) {
+		setupMessageSendTimer(BUSINESS_TIMEOUT);
+	}
+	
+	private synchronized void setupMessageStatusTimer(long duration) {
+		if (messageStatusTimer != null) {
+			messageStatusTimer.cancel();
+			messageStatusTimer = null;
+		}
+		
+		if (messageStatusTimer == null && CheckAck) {
 			
 			bleStatusCallback.headsUp("m: business timer reset!");
-			businessTimer = new Timer();
+			messageStatusTimer = new Timer();
 			
-			businessTimer.schedule(new TimerTask() {
+			messageStatusTimer.schedule(new TimerTask() {
 				public void run() {
-					businessTimer.cancel();
-					businessTimer = null;
+					messageStatusTimer.cancel();
+					messageStatusTimer = null;
 					
-					//SendMessagesToConnectedPeers();
 					CheckPendingMessages();
 				}
 				
-			}, youStillBusy);
+			}, duration);
+		}
+	}
+	
+	private synchronized void setupMessageSendTimer(long duration) {
+		if (messageSendTimer != null) {
+			messageSendTimer.cancel();
+			messageSendTimer = null;
+		}
+		
+		if (messageSendTimer == null && NeedSend) {
+			
+			bleStatusCallback.headsUp("m: business timer reset!");
+			messageSendTimer = new Timer();
+			
+			messageSendTimer.schedule(new TimerTask() {
+				public void run() {
+					messageSendTimer.cancel();
+					messageSendTimer = null;
+					
+					SendMessagesToConnectedPeers();
+				}
+				
+			}, duration);
 		}
 	}
 	
@@ -230,18 +307,6 @@ public class BleMessenger {
 		}
 	}
 	
-	public void StartBusy() {
-		StayingBusy = true;
-		setupBusinessTimer(BUSINESS_TIMEOUT);
-	}
-	
-	public void StopBusy() {
-		StayingBusy = false;
-	}
-	
-	public boolean BusyStatus() {
-		return StayingBusy;
-	}
 	
 	private void checkForStaleConnections() {
 		//bleStatusCallback.headsUp("m: check for stale connection!");
@@ -295,11 +360,15 @@ public class BleMessenger {
 	//TODO: change writeOut to indicate which particular message you're sending out
 	private void writeOut(String peerAddress) {
 
+
+		
 		// if i'm connected to you as a peripheral, and you are not yet subscribed, i should not be sending you
 		// any damn messages
 		
 		// look up the peer by their address (aka index)
 		BlePeer peer = peerMap.get(peerAddress);
+		
+		peer.IsConversing = true;
 		
 		// given a peer, get the first message in the queue to send out
 		BleMessage m = peer.getBleMessageOut();
@@ -329,11 +398,11 @@ public class BleMessenger {
 				
 	    		if (nextPacket != null) {
 	    			if (peer.ConnectedAs.equalsIgnoreCase("central")) {
-	    				Thread.sleep(100);
+	    				Thread.sleep(100); // wait 100 ms in between sends
 	    				flag_sent = bleCentral.submitCharacteristicWriteRequest(peerAddress, uuidFromBase("101"), nextPacket);
 	    				Log.v(TAG, "writing packet #" + i);
 	    			} else {
-	    				flag_sent = blePeripheral.updateCharValue(peerAddress, uuidFromBase("102"), nextPacket);
+	    				flag_sent = blePeripheral.updateCharValue(peerAddress, uuidFromBase(peripheralTransport), nextPacket);
 	    			}
 	    		}
 	    		
@@ -349,7 +418,9 @@ public class BleMessenger {
 			
 		}
 
-		bleStatusCallback.headsUp("m: " + String.valueOf(sent) + " packets sent");
+		peer.IsConversing = false;
+		
+		Log.v(TAG, String.valueOf(sent) + " packets sent");
 		
 		// we sent packets out, so clear our pending list (we'll requeue missing later)
 		m.ClearPendingPackets();
@@ -487,7 +558,12 @@ public class BleMessenger {
     	// if our current packet counter is ZERO, then we can expect our payload to be:
     	// the number of packets we're expecting
     	if (packetCounter == 0) {
-
+    		if (p.ConnectedAs.equalsIgnoreCase("central")) {
+    			incomingMessageCounter++;
+    			CheckAck = true;
+    			setupMessageStatusTimer(BUSINESS_TIMEOUT); // as a central, periodically check on pending messages
+    		}
+    		
     		// get the number of packets we're expecting - 2 bytes can indicate 0 through 65,535 packets 
     		parentMessagePacketTotal = (packetPayload[0] << 8) | packetPayload[1] & 0xFF;
     		
@@ -502,9 +578,17 @@ public class BleMessenger {
     	// If all the expected packets have been received, process this message
     	if (msgBeingBuilt.PendingPacketStatus() == false) {
     		
+    		// so now we need to stop check on pending messages if there are no pending messages
     		
     		// we can do this before we're even asked about it
     		if (p.ConnectedAs.equalsIgnoreCase("central")) {
+    			
+    			// msg received, decrement counter
+    			incomingMessageCounter--;
+    			
+    			if (incomingMessageCounter <= 0) {
+    				CheckAck = false;
+    			}
     			
     			Log.v(TAG, "parentMessage # is:" + parentMessage);
     			
@@ -578,8 +662,6 @@ public class BleMessenger {
     	// get the message corresponding to this msgid
     	m = blms.get(msg_id);
     	
-    	bleStatusCallback.headsUp("m: msg currently has " + String.valueOf(m.GetPendingPackets().size()) + " packets to send");
-
 		if (m != null) {
 			
 			String payloadDigest = messageMap.get(remoteAddress + "_" + msg_id);
@@ -591,24 +673,30 @@ public class BleMessenger {
 	    	
 	    	// if we're all done, mark this message sent
 	    	if (missing_packet_count == 0) {
-	    		bleStatusCallback.headsUp("m: all sent, removing msg " + String.valueOf(msg_id) + " from queue") ;
+	    		Log.v(TAG, "all sent, removing msg " + String.valueOf(msg_id) + " from queue");
 
 	    		bleStatusCallback.messageDelivered(remoteAddress, payloadDigest);
 	    		p.RemoveBleMessage(msg_id);
 	    		
+	    		outgoingMessageCounter--;
+	    		
+	    		if (outgoingMessageCounter <= 0) {
+	    			NeedSend = false;
+	    		}
+	    		
 	    	} else {
+	    		Log.v(TAG, "msg " + String.valueOf(msg_id) + " not sent, checking missing packets");
+	    		
 	    		// read the missing packet numbers into an array
 	    		byte[] missingPackets = Arrays.copyOfRange(incomingBytes, 2, incomingBytes.length);
 	    		bleStatusCallback.headsUp("m: " + String.valueOf(missingPackets.length) + " packet(s) didn't make it");
-	    		
+	    		int i = 0;
 	    		for (byte b: missingPackets) {
 	    			int missing_packet = b & 0xFF;
-	    			bleStatusCallback.headsUp("m: re-queuing packet #" + String.valueOf(missing_packet));
+	    			Log.v(TAG, "re-queuing packet #" + String.valueOf(missing_packet));
 	    			try {
 	    				if (m.PacketReQueue(missing_packet)) {
-	    					bleStatusCallback.headsUp("m: packet re-queued");
-	    				} else {
-	    					bleStatusCallback.headsUp("m: packet not re-queued");
+	    					i++;
 	    				}
 	    			} catch (Exception x) {
 	    				bleStatusCallback.headsUp("m: error calling BleMessage.PacketRequeue(" + String.valueOf(missing_packet) + ")");
@@ -617,7 +705,9 @@ public class BleMessenger {
 	    			
 	    		}
 	    		
-	    		bleStatusCallback.headsUp("m: message now has " + String.valueOf(m.GetPendingPackets().size()) + " packets to send");
+	    		bleStatusCallback.packetsRequeued(remoteAddress, msg_id, i);
+	    		
+	    		Log.v(TAG, "message now has " + String.valueOf(m.GetPendingPackets().size()) + " packets to send");
 	    		
 	    		// flag these packets for re-send
 	    		
@@ -732,7 +822,7 @@ public class BleMessenger {
     	public void incomingMissive(String remoteAddress, UUID remoteCharUUID, byte[] incomingBytes) {
     		
     		// if the UUID is 102, it's the notify
-    		if (remoteCharUUID.compareTo(uuidFromBase("102")) == 0) {
+    		if (remoteCharUUID.compareTo(uuidFromBase(peripheralTransport)) == 0) {
     			incomingMessage(remoteAddress, remoteCharUUID, incomingBytes);    			
     		} else if (remoteCharUUID.compareTo(uuidFromBase("105")) == 0) {
     			processMessageSendAcknowledgment(remoteAddress, remoteCharUUID, incomingBytes);
@@ -784,7 +874,7 @@ public class BleMessenger {
 			// now let's subscribe so we can get inbound stuff
 			
 			// onDescriptorWrite callback will be called, which will call blecentralhandler's subscribeSuccess
-			bleCentral.submitSubscription(remoteAddress, uuidFromBase("102"));
+			bleCentral.submitSubscription(remoteAddress, uuidFromBase(peripheralTransport));
 			
 		}
 		
@@ -806,15 +896,9 @@ public class BleMessenger {
      */
     public String AddMessage(String remoteAddress, BleApplicationMessage msg) {
     	String result = "";
-		BlePeer p = peerMap.get(remoteAddress);
 
-		// if we don't find a friend with this address, just return null
-		if (p == null) {
-			return null;
-		}
-		
 		// pass your message's bytes to the peer object to build a BleMessage to send, and get a digest of that message
-		result = p.BuildBleMessageOut(msg.GetAllBytes());
+		result = AddMessage(remoteAddress, msg.GetAllBytes());
     	
     	return result;
     	
@@ -831,12 +915,20 @@ public class BleMessenger {
     	String result = "";
 		BlePeer p = peerMap.get(remoteAddress);
 		
+		// we've added an outgoing message; we've got at least this one to send 
+		outgoingMessageCounter++;
+		NeedSend = true;
+		
 		// if we don't find a friend with this address, just return null
 		if (p == null) {
 			return null;
 		}
 		// pass your message's bytes to the peer object to build a BleMessage to send, and get a digest of that message
 		result = p.BuildBleMessageOut(messageBytes);
+		
+		if (outgoingMessageCounter >= 1){
+			setupMessageSendTimer(BUSINESS_TIMEOUT);
+		}
     	
     	return result;
     	
@@ -845,15 +937,17 @@ public class BleMessenger {
     /**
      *	If you're a central and you started getting a message and the peripheral just stopped sending it,
      *	you'll need to check the last time you received a packet for that message; if it's later than you'd
-     *	like you'll need to send an ACK packet to the Peripheral letting them know you're missing packets 
+     *	like you'll need to send an ACK packet to the Peripheral letting them know you're expecting more from them;
+     * this should only happen with Notify packets
      */
     private synchronized void CheckPendingMessages() {
     	
     	Log.v("CHECK", "check pending messages");
+    	BlePeer p = null;
     	
     	for (Map.Entry<String, BlePeer> entry : peerMap.entrySet()) {
     		String peerAddress = entry.getKey();
-    		BlePeer p = entry.getValue();
+    		p = entry.getValue();
 
     		// only go through this rigamarole if you're connected as a central
     		if (p.ConnectedAs.equalsIgnoreCase("central")) {
@@ -862,16 +956,22 @@ public class BleMessenger {
 				
 				if (ack != null) {
 					bleCentral.submitCharacteristicWriteRequest(peerAddress, uuidFromBase("105"), ack);
-					setupBusinessTimer(BUSINESS_TIMEOUT);
+					
+					// tell the remote person about this missing stuff, and then requeue
+					setupMessageStatusTimer(BUSINESS_TIMEOUT + p.CheckStale());
 					break;
 				}
     		}
 			
     	}
-    	
-    	// in case you don't have any missing packets, still check again
-    	setupBusinessTimer(BUSINESS_TIMEOUT);
-    	
+
+		// in case you don't have any missing packets, still check again
+    	/*
+    	if (p != null) {
+    		if (p.ConnectedAs.equalsIgnoreCase("central")) {
+    			setupMessageStatusTimer(BUSINESS_TIMEOUT);
+    		}
+    	}*/
     }
     
     /**

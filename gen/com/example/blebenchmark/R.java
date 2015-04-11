@@ -25,12 +25,15 @@ public final class R {
         public static final int ic_launcher=0x7f020000;
     }
     public static final class id {
-        public static final int action_settings=0x7f090006;
+        public static final int action_settings=0x7f090009;
         public static final int advert=0x7f090004;
         public static final int banner=0x7f090001;
         public static final int buttons_control=0x7f090002;
+        public static final int radio_indicate=0x7f090008;
+        public static final int radio_notify=0x7f090007;
         public static final int search=0x7f090003;
         public static final int send=0x7f090005;
+        public static final int test_parameters=0x7f090006;
         public static final int toprow_control=0x7f090000;
     }
     public static final class layout {

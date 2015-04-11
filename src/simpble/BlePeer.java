@@ -40,6 +40,8 @@ public class BlePeer {
 	public boolean TransportTo;
 	public boolean TransportFrom;
 	
+	public boolean IsConversing;
+	
 	// need to keep track of our messages because we don't want to reset our counter
 	private int MaxMessageCounter;
 	
@@ -60,6 +62,8 @@ public class BlePeer {
 		
 		TransportTo = false;
 		TransportFrom = false;
+		
+		IsConversing = false;
 		
 		// set the last activity date to right now
 		MarkActive();

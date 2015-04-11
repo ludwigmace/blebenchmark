@@ -26,8 +26,12 @@ public class BleService extends Service {
 	public static final String ACTION_NEGOTIATING = "negotiating";
 	public static final String ACTION_CONNECTED = "connected";
 	public static final String ACTION_DISCONNECTED = "disconnected";
+	public static final String ACTION_MSG_RECEIVED = "msg_received";
 	public static final String INCOMING_PACKET = "packet_in";
 	public static final String NEW_MESSAGE = "new_message";
+	public static final String INCOMPLETE_SEND = "incomplete_send";
+	
+
 	
     private final IBinder mBinder = new LocalBinder();
 	
@@ -57,14 +61,15 @@ public class BleService extends Service {
     	Log.v(TAG, "send msg to " + remoteAddress);
     	result = bleMessenger.AddMessage(remoteAddress, messageBytes);
     	
-    	bleMessenger.SendMessagesToConnectedPeers();
-    	
     	return result;
     }
     
     public void LookAround(int ms) {
     	bleMessenger.ScanForPeers(ms);
-    	
+    }
+    
+    public void SetPeripheralTransportMode(String method) {
+    	bleMessenger.SetPeripheralTransportMode(method);
     }
     
     //TODO: maybe better here to check if we're currently advertising?
@@ -106,6 +111,22 @@ public class BleService extends Service {
     
 		 	  
 	BleStatusCallback bleMessageStatus = new BleStatusCallback() {
+		
+		@Override
+		public void packetsRequeued(String remoteAddress, int messageId, int missingPacketCount) {
+			
+			Log.v(TAG, "new intent INCOMPLETE_SEND for " + remoteAddress);
+			
+			final Intent intent = new Intent(INCOMPLETE_SEND);
+			
+			Bundle extras = new Bundle();
+			extras.putString("REMOTE_ADDR", remoteAddress);
+			extras.putInt("PARENT_MSG_ID", messageId);
+			extras.putInt("MISSING_PACKETS", missingPacketCount);
+			
+			intent.putExtras(extras);
+			sendBroadcast(intent);
+		}
 		
 		@Override
 		public void incomingPacket(String remoteAddress, int messageId, int currentPacket) {
@@ -183,7 +204,18 @@ public class BleService extends Service {
 
 		@Override
 		public void handleReceivedMessage(String remoteAddress, byte[] MessageBytes) {
-			// TODO Auto-generated method stub
+
+			final Intent intent = new Intent(ACTION_MSG_RECEIVED);
+			Bundle extras = new Bundle();
+			extras.putString("REMOTE_ADDR", remoteAddress);
+			extras.putByteArray("MSG_PAYLOAD", MessageBytes);
+			
+			intent.putExtras(extras);
+			
+			sendBroadcast(intent);
+			
+			Log.v(TAG, "negotiating " + String.valueOf(System.currentTimeMillis()));
+			
 			
 		}
 
