@@ -35,7 +35,7 @@ public class BleService extends Service {
 	public static final String MESSAGE_DELIVERED = "msg_delivered";
 	public static final String MESSAGE_START_SEND = "message_start_send";
 	public static final String MESSAGE_UPDATE = "message_update_progress";
-	
+	public static final String SCANNING_UPDATE = "scanning_update";
 
 	
     private final IBinder mBinder = new LocalBinder();
@@ -71,6 +71,10 @@ public class BleService extends Service {
     
     public void LookAround(int ms) {
     	bleMessenger.ScanForPeers(ms);
+    }
+    
+    public void StopScan() {
+    	bleMessenger.StopScan();
     }
     
     public void SetPeripheralTransportMode(String method) {
@@ -134,13 +138,13 @@ public class BleService extends Service {
 		}
 		
 		@Override
-		public void incomingPacket(String remoteAddress, int messageId, int currentPacket) {
+		public void incomingPacket(String remoteAddress, String payloadDigest, int parentMessageId, int packetsSent) {
 			final Intent intent = new Intent(INCOMING_PACKET);
 			
 			Bundle extras = new Bundle();
 			extras.putString("REMOTE_ADDR", remoteAddress);
-			extras.putInt("PARENT_MSG_ID", messageId);
-			extras.putInt("CURRENT_PACKET", currentPacket);
+			extras.putInt("PARENT_MSG_ID", parentMessageId);
+			extras.putInt("CURRENT_PACKET", packetsSent);
 			
 			intent.putExtras(extras);
 			sendBroadcast(intent);
@@ -288,6 +292,18 @@ public class BleService extends Service {
 			extras.putInt("PARENT_MSG_ID", parentMessageId);			
 			extras.putString("MSG_HASH", payloadDigest);
 			extras.putInt("PACKETS_SENT", packetsSent);
+			
+			intent.putExtras(extras);
+			sendBroadcast(intent);
+			
+		}
+
+		@Override
+		public void scanningStatusUpdate(boolean isScanning) {
+			final Intent intent = new Intent(SCANNING_UPDATE);
+			
+			Bundle extras = new Bundle();
+			extras.putBoolean("SCANNING_UPDATE", isScanning);
 			
 			intent.putExtras(extras);
 			sendBroadcast(intent);

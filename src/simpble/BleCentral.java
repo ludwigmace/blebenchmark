@@ -82,8 +82,6 @@ public class BleCentral {
     	scanDuration = defaultScanInMs;
     	
     	centralBTA = btA;
-
-    	bleScanner = centralBTA.getBluetoothLeScanner();
     	
     	boolean validUuidBase = false;
     	
@@ -143,6 +141,7 @@ public class BleCentral {
      * @param btAddress Bluetooth address of a potential peer this central client will try to connect to
      */
     public void connectAddress(String btAddress){
+    	Log.v(TAG, "connect to " + btAddress);
     	BluetoothDevice b = centralBTA.getRemoteDevice(btAddress);
     	b.connectGatt(ctx, false, mGattCallback);
     }
@@ -155,6 +154,7 @@ public class BleCentral {
     	// get the gatt connection to the particular server and disconnect
     	try {
     		gattS.get(btAddress).disconnect();
+    		gattS.get(btAddress).close();
     	} catch (Exception e) {
     		Log.e(TAG, "error disconnecting");
     		Log.e(TAG, e.getMessage());
@@ -320,6 +320,7 @@ public class BleCentral {
     	
     	public void onScanResult (int callbackType, ScanResult result) {
     		
+    		Log.v(TAG, "found a device " + result.getDevice());
     		// if we haven't already gotten the device, then add it to our list of found devices
 			if (!foundDevices.contains(result.getDevice())) {
 				foundDevices.add(result.getDevice());
@@ -337,16 +338,23 @@ public class BleCentral {
     	final long SCAN_PERIOD = scanDuration;
     	
         if (enable) {
+        	if (bleScanner == null) {
+        		bleScanner = centralBTA.getBluetoothLeScanner();
+        	}
 
         	// call STOP after SCAN_PERIOD ms, which will spawn a thread to stop the scan
             mHandler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
                     mScanning = false;
-                    bleScanner.stopScan(scanCallback);
+                    
+                    if (bleScanner != null) {
+                    	bleScanner.stopScan(scanCallback);
+                    }
 
         			bleCentralHandler.intakeFoundDevices(foundDevices);
         			Log.v(TAG, "stopscan, " + String.valueOf(foundDevices.size()) + " devices, thread "+ Thread.currentThread().getName());
+        			bleScanner = null;
                 }
             }, SCAN_PERIOD);
 
@@ -361,7 +369,10 @@ public class BleCentral {
         	
         	// the "enable" variable passed was False, so turn scanning off
             mScanning = false;
-            bleScanner.stopScan(scanCallback);
+            if (bleScanner != null) {
+            	bleScanner.stopScan(scanCallback);
+            }
+            bleScanner = null;
             
         }
 
@@ -416,10 +427,34 @@ public class BleCentral {
 
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
 
-                // since we're disconnected, remove this guy
-                gattS.remove(gatt.getDevice().getAddress());
+            	String remoteAddress = gatt.getDevice().getAddress();
+            	
+            	// try to disconnect
+                try {
+                	gattS.get(remoteAddress).disconnect();
+                } catch (Exception x) {
+                	
+                }
                 
-                bleCentralHandler.reportDisconnect(gatt.getDevice().getAddress());
+                // try to close the gatt reference
+                try {
+                    gattS.get(remoteAddress).close();                	
+                } catch (Exception x) {
+                	
+                }
+                
+                // since we're disconnected, remove this guy
+                gattS.remove(remoteAddress);
+                
+                // try to close local references
+                try {
+                	gatt.disconnect();
+                	gatt.close();
+                } catch (Exception x) {
+                	
+                }
+                
+                bleCentralHandler.reportDisconnect(remoteAddress);
                 Log.i(TAG, "Disconnected from GATT server " + gatt.getDevice().getAddress());
                 
             }
@@ -443,6 +478,7 @@ public class BleCentral {
             	
             	// if we've found a service
             	if (s != null) {
+            		Log.v(TAG, "found targeted service");
             		bServiceGood = true;
             		
             		// check to make sure every characteristic we want is advertised in this service
@@ -453,6 +489,8 @@ public class BleCentral {
                 			break;
                 		}
                 	}
+                	
+                	Log.v(TAG, "service meets serviceDef");
             		           
             	} else {
             		Log.v(TAG, "can't find service " + strSvcUuidBase);

@@ -167,10 +167,12 @@ public class BleMessage {
 	
 	// create a BlePacket with a given sequence and payload, and add to our packets list
 	private void addPacket(int packetSequence, byte[] packetBytes) {
+		Log.v(TAG, "messagePackets.put(" + packetSequence + ", a new blepacket w/ bytes");
 		messagePackets.put(packetSequence, new BlePacket(packetSequence, packetBytes));
 		
 		// if the size of the sparsearray is >= the # of packets we're expecting then we've got the msg
 		// we're going strictly off the number of packets here, and i'm not sure if that's the best way to go about this
+		Log.v(TAG, "messagePackets.size() is " + messagePackets.size() + "; BlePacketCount is " + BlePacketCount);
 		if (messagePackets.size() > BlePacketCount) {
 			pendingPacketStatus = false;
 		} else {
@@ -312,6 +314,8 @@ public class BleMessage {
 		BlePacketCount = messageSize;
 		pendingPacketStatus = true;
 		
+		Log.v(TAG, "initialize messagePackets, set BlePacketCount to " + messageSize);
+		
 		BuildMessageFromPackets(packetCounter, packetPayload);
 	}
 
@@ -387,9 +391,9 @@ public class BleMessage {
 		
 		try {
 			byte[] digestCalculated = Arrays.copyOfRange(ByteUtilities.digestAsBytes(allBytes), 0, PACKETSIZE - 5);
-			Log.v(TAG, "digest calc:" + ByteUtilities.bytesToHex(digestCalculated));
+			/*Log.v(TAG, "digest calc:" + ByteUtilities.bytesToHex(digestCalculated));
 			Log.v(TAG, "digest orig:" + ByteUtilities.bytesToHex(PayloadDigest));
-			Log.v(TAG, "bytes to verify:" + ByteUtilities.bytesToHex(allBytes));
+			Log.v(TAG, "bytes to verify:" + ByteUtilities.bytesToHex(allBytes));*/
 			if (Arrays.equals(PayloadDigest, digestCalculated)) {
 				result = true;
 			}
@@ -441,6 +445,10 @@ public class BleMessage {
 		
         return os.toByteArray(); 
 		
+	}
+	
+	public int ExpectedPacketCount() {
+		return BlePacketCount;
 	}
 	
 }

@@ -21,6 +21,13 @@ public interface BleStatusCallback {
 	public void advertisingStatusUpdate(boolean isAdvertising);
 	
 	/**
+	 * If your client is in Central mode, this notifies your application if you are scanning or not
+	 * 
+	 * @param isAdvertising
+	 */
+	public void scanningStatusUpdate(boolean isScanning);
+	
+	/**
 	 * Callback executed when a message you have queued has been delivered.  Between the remoteAddress and digest you should be able to uniquely identify your message 
 	 * 
 	 * @param remoteAddress Bluetooth address (just used as an index, could be anything) of the peer to whom BleMessenger delivered the message
@@ -67,10 +74,11 @@ public interface BleStatusCallback {
 	 * Callback executed when a non-initial packet is coming in
 	 * 
 	 * @param remoteAddress Bluetooth address (just used as an index, could be anything) of the now-disconnected peer
-	 * @param messageId a truncated hash of the incoming message
-	 * @param packetsExpected number of packets we should end up receiving
+	 * @param payloadDigest hash identifying this message
+	 * @param parentMessageId per-parent identifier of message
+	 * @param packetsSent packet number received
 	 */
-	public void incomingPacket(String remoteAddress, int messageId, int currentPacket);
+	public void incomingPacket(String remoteAddress, String payloadDigest, int parentMessageId, int packetsSent);
 	
 	
 	public void packetsRequeued(String remoteAddress, int messageId, int missingPacketCount);

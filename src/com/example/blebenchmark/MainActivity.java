@@ -38,6 +38,7 @@ public class MainActivity extends Activity {
 	TextView textBanner;
 	Button btnSend;
 	Button btnAdvertise;
+	Button btnScan;
 	RadioButton btnNotify;
 	RadioButton btnIndicate;
 	
@@ -95,21 +96,50 @@ public class MainActivity extends Activity {
             Log.v(TAG, action + " intent received");
 
             // we've received a whole message, get its payload and the buddy who sent it
+            if (action == BleService.SCANNING_UPDATE) {
+            	final boolean isScanning = extras.getBoolean("SCANNING_UPDATE");
+            	
+            	if (!isScanning) {
+            		setBanner("stopped scanning");
+            		btnScan.setText("LOOK");
+            	} else {
+            		setBanner("started scanning");
+            	}
+            }
+            
+            // we've received a whole message, get its payload and the buddy who sent it
             if (action == BleService.ACTION_MSG_RECEIVED) {
             	BenchBuddy buddy = benchBuddies.get(extras.getString("REMOTE_ADDR"));
             	
-    			byte[] payload = extras.getByteArray("MSG_PAYLOAD");
-    			final String remoteAddress = extras.getString("REMOTE_ADDR");
-    			final int parentMessageId = extras.getInt("PARENT_MSG_ID");
-    			final boolean messageIntact = extras.getBoolean("INTEGRITY_PASS");
-    			
-    			if (messageIntact) {
-    				messageDetails.setText("rcvd msg " + parentMessageId + ", " + payload.length + " bytes, " + "good");
-    			} else {
-    				messageDetails.setText("rcvd msg " + parentMessageId + ", " + payload.length + " bytes, " + "bad");
-    			}
-    			
-    			stopReceive.setText("stop recv:" + String.valueOf(System.currentTimeMillis()));
+            	if (buddy != null) {
+            	
+	    			byte[] payload = extras.getByteArray("MSG_PAYLOAD");
+	    			final String remoteAddress = extras.getString("REMOTE_ADDR");
+	    			final int parentMessageId = extras.getInt("PARENT_MSG_ID");
+	    			final boolean messageIntact = extras.getBoolean("INTEGRITY_PASS");
+	    			
+	    			BenchMessage m = buddy.benchMessages.get(parentMessageId);
+	    			
+	    			if (m != null) {
+	    			
+		    			m.MillisecondStop = System.currentTimeMillis();
+		    			
+		    			String duration = String.valueOf((m.MillisecondStop - m.MillisecondStart) / 1000);
+		    			
+		    			String intact = "";
+		    			
+		    			if (messageIntact) {
+		    				intact = "good";
+		    			} else {
+		    				intact = "bad";
+		    			}
+		    			
+		    			messageDetails.setText("rcvd msg " + parentMessageId + ", " + payload.length + " bytes, " + m.IncompleteReceives + " retries, " +  intact);
+		
+		    			
+		    			stopReceive.setText("msg received in " + duration + " seconds");
+	    			}
+            	}
     			
             }
             
@@ -118,6 +148,16 @@ public class MainActivity extends Activity {
             }
             
             if (action == BleService.INCOMPLETE_RECEIVE) {
+            	BenchBuddy b = benchBuddies.get(extras.getString("REMOTE_ADDR"));
+            	
+            	final int parent_msgid = extras.getInt("PARENT_MSG_ID");
+            	final int missing_packets = extras.getInt("MISSING_PACKETS");
+            	
+            	BenchMessage m = b.benchMessages.get(parent_msgid);
+            	
+            	m.IncompleteReceives = m.IncompleteReceives + 1;
+            	
+            	
             	setBanner("incoming msg " + extras.getInt("PARENT_MSG_ID") + " lacking " + extras.getInt("MISSING_PACKETS") + " packets");
             }
             
@@ -236,7 +276,9 @@ public class MainActivity extends Activity {
 		
 		textBanner = (TextView) findViewById(R.id.banner);
 		btnSend = (Button) findViewById(R.id.send);
+		
 		btnAdvertise = (Button) findViewById(R.id.advert);
+		btnScan = (Button) findViewById(R.id.search);
 		
 		btnNotify = (RadioButton) findViewById(R.id.radio_notify);
 		btnIndicate = (RadioButton) findViewById(R.id.radio_indicate);
@@ -256,6 +298,8 @@ public class MainActivity extends Activity {
         
         // init the rsaKey object
         KeyStuff rsaKey = null;
+        
+        
         
 		try {
 			rsaKey = new KeyStuff(this, myIdentifier);
@@ -301,6 +345,8 @@ public class MainActivity extends Activity {
         intentFilter.addAction(BleService.MESSAGE_START_SEND);
         intentFilter.addAction(BleService.MESSAGE_UPDATE);
         
+        intentFilter.addAction(BleService.SCANNING_UPDATE);
+        
         return intentFilter;
     }
     
@@ -341,8 +387,14 @@ public class MainActivity extends Activity {
     
 	
 	public void handleButtonLook(View view) {
-		simpBleService.LookAround(5000);
-		setBanner("looking around");
+		if (btnScan.getText().toString().equalsIgnoreCase("LOOK")) {
+			btnScan.setText("STOP");
+			simpBleService.LookAround(5000);
+			setBanner("looking around");
+		} else {
+			btnScan.setText("LOOK");
+			simpBleService.StopScan();
+		}
 	}
 	
 	public void handleButtonAdvertise(View view) {

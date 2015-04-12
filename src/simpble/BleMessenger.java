@@ -385,6 +385,10 @@ public class BleMessenger {
 		
 		int update_interval = (int) (bps.size() * 0.05);
 		
+		if (update_interval == 0) {
+			update_interval = 1;
+		}
+		
 		// loop over all our packets to send
 		for (i = 0; i < bps.size(); i++) {
 			
@@ -412,7 +416,7 @@ public class BleMessenger {
 		    				flag_sent = bleCentral.submitCharacteristicWriteRequest(peerAddress, uuidFromBase("101"), nextPacket);
 		    				Log.v(TAG, "writing packet #" + i);
 		    			} else {
-		    				Thread.sleep(10);
+		    				Thread.sleep(8);
 		    				flag_sent = blePeripheral.updateCharValue(peerAddress, uuidFromBase(peripheralTransport), nextPacket);
 		    			}
 		    		}
@@ -505,9 +509,19 @@ public class BleMessenger {
 	 * @param duration Milliseconds to scan at a given time
 	 */
 	public void ScanForPeers(int duration) {
-		
+		bleStatusCallback.scanningStatusUpdate(true);
 		bleCentral.setScanDuration(duration);
 		bleCentral.scanForPeripherals(true);
+		
+	}
+	
+	/**
+	 * Scan for ble peripherals as a central device
+	 * @param duration Milliseconds to scan at a given time
+	 */
+	public void StopScan() {
+		
+		bleCentral.scanForPeripherals(false);
 		
 	}
 		
@@ -586,7 +600,7 @@ public class BleMessenger {
     		}
     		
     		// get the number of packets we're expecting - 2 bytes can indicate 0 through 65,535 packets 
-    		parentMessagePacketTotal = (packetPayload[0] << 8) | packetPayload[1] & 0xFF;
+    		parentMessagePacketTotal = (packetPayload[0] & 0xFF) << 8 | packetPayload[1] & 0xFF;
     		
     		// since this is the first packet in the message, pass in the number of packets we're expecting
     		msgBeingBuilt.BuildMessageFromPackets(packetCounter, packetPayload, parentMessagePacketTotal);
@@ -601,7 +615,8 @@ public class BleMessenger {
     		
     		// so now we need to stop check on pending messages if there are no pending messages
     		
-    		// we can do this before we're even asked about it
+    		// if, as a Central, we've received all the packets then go ahead and let the sending peripheral know
+    		// if you're a Peripheral, you will wait for the Central to let you know what is missing
     		if (p.ConnectedAs.equalsIgnoreCase("central")) {
     			
     			// msg received, decrement counter
@@ -622,10 +637,6 @@ public class BleMessenger {
     			
     			bleCentral.submitCharacteristicWriteRequest(remoteAddress, uuidFromBase("105"), ack);
     			
-    			// some kind of timer to goose the peripheral needs to be reset here
-    			
-    		} else {
-    			// when peripheral receives a message, we wait until asked
     		}
     		
     		boolean msgIntact = msgBeingBuilt.VerifyDigest();
@@ -643,9 +654,18 @@ public class BleMessenger {
     			
     			bleStatusCallback.newMessage(remoteAddress, messageHash, parentMessage, parentMessagePacketTotal);
 
-    		} /*else { // this is too much to callback, hurts throughput
-    			bleStatusCallback.incomingPacket(remoteAddress, parentMessage, packetCounter);
-    		}*/
+    		} else { // this is too much to callback, hurts throughput
+    			int update_interval = (int) (msgBeingBuilt.ExpectedPacketCount() * 0.05);
+    			
+    			if (update_interval == 0) {
+    				update_interval = 1;
+    			}
+    			
+    			if ((packetCounter % update_interval) == 0) {
+    				bleStatusCallback.incomingPacket(remoteAddress, "", msgBeingBuilt.GetMessageNumber(), packetCounter);
+    			}
+    			
+    		}
     		
     	}
     	
@@ -867,7 +887,9 @@ public class BleMessenger {
     	
 		public void intakeFoundDevices(ArrayList<BluetoothDevice> devices) {
 
-			Log.v(TAG, "intake devices, thread "+ Thread.currentThread().getName());
+			// your scanning is done
+			bleStatusCallback.scanningStatusUpdate(false);
+			
 			// loop over all the found devices
 			// add them 
 			for (BluetoothDevice b: devices) {
