@@ -167,12 +167,11 @@ public class BleMessage {
 	
 	// create a BlePacket with a given sequence and payload, and add to our packets list
 	private void addPacket(int packetSequence, byte[] packetBytes) {
-		Log.v(TAG, "messagePackets.put(" + packetSequence + ", a new blepacket w/ bytes");
+
 		messagePackets.put(packetSequence, new BlePacket(packetSequence, packetBytes));
 		
 		// if the size of the sparsearray is >= the # of packets we're expecting then we've got the msg
 		// we're going strictly off the number of packets here, and i'm not sure if that's the best way to go about this
-		Log.v(TAG, "messagePackets.size() is " + messagePackets.size() + "; BlePacketCount is " + BlePacketCount);
 		if (messagePackets.size() > BlePacketCount) {
 			pendingPacketStatus = false;
 		} else {

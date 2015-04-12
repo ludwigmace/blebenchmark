@@ -574,7 +574,7 @@ public class BleMessenger {
     	
     	// get the Message to which these packets belong as well as the current counter
     	int parentMessage = incomingBytes[0] & 0xFF; //00
-    	int packetCounter = (incomingBytes[1] << 8) | incomingBytes[2] & 0xFF; //0001
+    	int packetCounter = (incomingBytes[1] & 0xFF) << 8 | incomingBytes[2] & 0xFF; //0001
 
     	// get the peer which matches the connected remote address 
     	BlePeer p = peerMap.get(remoteAddress);
