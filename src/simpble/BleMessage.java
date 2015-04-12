@@ -337,11 +337,12 @@ public class BleMessage {
 		
 		int x = 0;
 		int y = 0;
+		int missing = 0;
 		// search the list for every packet
 		for (int i = 0; i <= BlePacketCount; i++) {
 			// if you're missing a packet
 			if (!l.contains(i)) {
-				
+				missing++;
 				// if we've already started counting and the accrual is contiguous
 				if ((y == i - 1) && (i - x <= 255)) {
 					y = i;
@@ -353,7 +354,7 @@ public class BleMessage {
 				}
 			}
 		}
-		
+		Log.v("CHECK", "missing " + missing + " packets");
 		return rangeMissing;
 	}
 	

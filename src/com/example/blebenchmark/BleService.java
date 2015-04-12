@@ -30,6 +30,7 @@ public class BleService extends Service {
 	public static final String INCOMING_PACKET = "packet_in";
 	public static final String NEW_MESSAGE = "new_message";
 	public static final String INCOMPLETE_SEND = "incomplete_send";
+	public static final String INCOMPLETE_RECEIVE = "incomplete_recv";
 	
 
 	
@@ -234,6 +235,22 @@ public class BleService extends Service {
 		@Override
 		public void headsUp(String msg) {
 			// TODO Auto-generated method stub
+			
+		}
+
+		@Override
+		public void missingPackets(String remoteAddress, int messageId, int missingPacketCount) {
+			Log.v(TAG, "new intent INCOMPLETE_SEND for " + remoteAddress);
+			
+			final Intent intent = new Intent(INCOMPLETE_RECEIVE);
+			
+			Bundle extras = new Bundle();
+			extras.putString("REMOTE_ADDR", remoteAddress);
+			extras.putInt("PARENT_MSG_ID", messageId);
+			extras.putInt("MISSING_PACKETS", missingPacketCount);
+			
+			intent.putExtras(extras);
+			sendBroadcast(intent);
 			
 		}
 

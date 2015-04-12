@@ -109,6 +109,10 @@ public class MainActivity extends Activity {
             	setBanner(extras.getString("REMOTE_ADDR") + "(" + extras.getInt("PARENT_MSG_ID") + ")"  + " lacking " + extras.getInt("MISSING_PACKETS") + " packets");
             }
             
+            if (action == BleService.INCOMPLETE_RECEIVE) {
+            	setBanner("incoming msg " + extras.getInt("PARENT_MSG_ID") + " lacking " + extras.getInt("MISSING_PACKETS") + " packets");
+            }
+            
             // we're connected, so add this peer to our list of buddies
             if (action == BleService.ACTION_CONNECTED) {
             
@@ -242,7 +246,7 @@ public class MainActivity extends Activity {
         intentFilter.addAction(BleService.ACTION_MSG_RECEIVED);
         intentFilter.addAction(BleService.NEW_MESSAGE);
         intentFilter.addAction(BleService.INCOMPLETE_SEND);
-        
+        intentFilter.addAction(BleService.INCOMPLETE_RECEIVE);
         
         
         return intentFilter;

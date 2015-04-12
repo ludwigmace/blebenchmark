@@ -250,7 +250,6 @@ public class BleMessenger {
 		
 		if (messageStatusTimer == null && CheckAck) {
 			
-			bleStatusCallback.headsUp("m: business timer reset!");
 			messageStatusTimer = new Timer();
 			
 			messageStatusTimer.schedule(new TimerTask() {
@@ -273,7 +272,6 @@ public class BleMessenger {
 		
 		if (messageSendTimer == null && NeedSend) {
 			
-			bleStatusCallback.headsUp("m: business timer reset!");
 			messageSendTimer = new Timer();
 			
 			messageSendTimer.schedule(new TimerTask() {
@@ -379,13 +377,11 @@ public class BleMessenger {
 		// add (or update) a mapping of the digest of this message to a way to get it
 		messageMap.put(peerAddress + "_" + m.GetMessageNumber(), ByteUtilities.bytesToHex(m.PayloadDigest));
 			
-		// the previous call allows us to get the current message
-		bleStatusCallback.headsUp("m: sending message: " + String.valueOf(m.GetMessageNumber()));
-
 		// get a sparsearray of the packets pending send for the message m
 		SparseArray<BlePacket> bps = m.GetPendingPackets();
 		
-		bleStatusCallback.headsUp("m: # of pending packets: " + String.valueOf(bps.size()));
+		Log.v(TAG, "# of pending packets: " + String.valueOf(bps.size()));
+		
 		int sent = 0;
 		int i = 0;
 		
@@ -393,31 +389,47 @@ public class BleMessenger {
 		for (i = 0; i < bps.size(); i++) {
 			
 			BlePacket p = bps.valueAt(i);
+			int packet_num;
 			
 			try {
-		
-				byte[] nextPacket = p.MessageBytes;
-				boolean flag_sent = false;
+				packet_num = bps.keyAt(i); 
+			} catch (Exception x){
+				packet_num = -1;
+			}
+			
+			if (p != null) {
+			
+				try {
+			
+					Log.v(TAG, "send packet " + packet_num);
+					
+					byte[] nextPacket = p.MessageBytes; // packet is null here....
+					boolean flag_sent = false;
+					
+		    		if (nextPacket != null) {
+		    			if (peer.ConnectedAs.equalsIgnoreCase("central")) {
+		    				Thread.sleep(100); // wait 100 ms in between sends
+		    				flag_sent = bleCentral.submitCharacteristicWriteRequest(peerAddress, uuidFromBase("101"), nextPacket);
+		    				Log.v(TAG, "writing packet #" + i);
+		    			} else {
+		    				flag_sent = blePeripheral.updateCharValue(peerAddress, uuidFromBase(peripheralTransport), nextPacket);
+		    			}
+		    		}
+		    		
+		    		// if the particular packet was sent, increment our "sent" counter
+		    		if (flag_sent) {
+		    			sent++;
+		    		}
+		    		
+				}  catch (Exception e) {
+	    			Log.e(TAG, "packet send error: " + e.getMessage());
+	    			bleStatusCallback.headsUp("m: packet send error");
+	    		}
 				
-	    		if (nextPacket != null) {
-	    			if (peer.ConnectedAs.equalsIgnoreCase("central")) {
-	    				Thread.sleep(100); // wait 100 ms in between sends
-	    				flag_sent = bleCentral.submitCharacteristicWriteRequest(peerAddress, uuidFromBase("101"), nextPacket);
-	    				Log.v(TAG, "writing packet #" + i);
-	    			} else {
-	    				flag_sent = blePeripheral.updateCharValue(peerAddress, uuidFromBase(peripheralTransport), nextPacket);
-	    			}
-	    		}
-	    		
-	    		// if the particular packet was sent, increment our "sent" counter
-	    		if (flag_sent) {
-	    			sent++;
-	    		}
-	    		
-			}  catch (Exception e) {
-    			Log.e(TAG, "packet send error: " + e.getMessage());
-    			bleStatusCallback.headsUp("m: packet send error");
-    		}
+			} else {
+				Log.v(TAG, "no BlePacket for index " + i + " and packetnum " + packet_num);
+				
+			}
 			
 		}
 
@@ -625,9 +637,9 @@ public class BleMessenger {
     			
     			bleStatusCallback.newMessage(remoteAddress, messageHash, parentMessage, parentMessagePacketTotal);
 
-    		} else {
+    		} /*else { // this is too much to callback, hurts throughput
     			bleStatusCallback.incomingPacket(remoteAddress, parentMessage, packetCounter);
-    		}
+    		}*/
     		
     	}
     	
@@ -700,9 +712,11 @@ public class BleMessenger {
 	    		int packet_requeue_count = 0;
 	    		// at most we can have 5 triplets of ranges
 	    		for (int i = 0; i < 5; i++) {
-		    		int missingOffset = (missingPackets[i] & 0xFF) << 8 | (missingPackets[i+1] & 0xFF);
+	    			int tripletStart = i * 3;
+	    			
+		    		int missingOffset = (missingPackets[tripletStart] & 0xFF) << 8 | (missingPackets[tripletStart+1] & 0xFF);
 		    		
-		    		int missingCount = (byte)missingPackets[i+2] & 0xFF;
+		    		int missingCount = (byte)missingPackets[tripletStart+2] & 0xFF;
 		    		
 		    		Log.v(TAG, "from packet " + missingOffset + " queue " + missingCount);
 		    		
@@ -957,7 +971,6 @@ public class BleMessenger {
      */
     private synchronized void CheckPendingMessages() {
     	
-    	Log.v("CHECK", "check pending messages");
     	BlePeer p = null;
     	boolean messageTimerSet = false;
     	
@@ -970,9 +983,15 @@ public class BleMessenger {
     		
 				byte[] ack = missingPacketsForPeer(peerAddress);
 				
-				Log.v(TAG, "missing packets delivery:" + ByteUtilities.bytesToHex(ack));
+				Log.v("CHECK", "missing packets delivery:" + ByteUtilities.bytesToHex(ack));
 				
 				if (ack != null) {
+					
+					int msgid = ack[0];
+					int missing_total = (ack[1] & 0xFF) << 8 | ack[2] & 0xFF;
+					
+					bleStatusCallback.missingPackets(peerAddress, msgid, missing_total);
+					
 					bleCentral.submitCharacteristicWriteRequest(peerAddress, uuidFromBase("105"), ack);
 					
 					// tell the remote person about this missing stuff, and then requeue
