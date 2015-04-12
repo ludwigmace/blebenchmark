@@ -292,7 +292,7 @@ public class BleMessage {
 		 */
 		if (!pendingPacketStatus) {
 			// now that we've got all the packets, build the raw bytes for this message
-			allBytes = dePacketize();
+			allBytes = ByteUtilities.trimmedBytes(dePacketize());
 		}
 		
 	}
@@ -376,7 +376,28 @@ public class BleMessage {
 		allBytes = RawMessageBytes;
 		PayloadDigest  = Arrays.copyOfRange(ByteUtilities.digestAsBytes(allBytes), 0, PACKETSIZE - 5);
 
+		Log.v(TAG, "bytes out:" + ByteUtilities.bytesToHex(allBytes));
+		Log.v(TAG, "digest:" + ByteUtilities.bytesToHex(PayloadDigest));
+		
 		return success;
+	}
+	
+	public boolean VerifyDigest() {
+		boolean result = false;
+		
+		try {
+			byte[] digestCalculated = Arrays.copyOfRange(ByteUtilities.digestAsBytes(allBytes), 0, PACKETSIZE - 5);
+			Log.v(TAG, "digest calc:" + ByteUtilities.bytesToHex(digestCalculated));
+			Log.v(TAG, "digest orig:" + ByteUtilities.bytesToHex(PayloadDigest));
+			Log.v(TAG, "bytes to verify:" + ByteUtilities.bytesToHex(allBytes));
+			if (Arrays.equals(PayloadDigest, digestCalculated)) {
+				result = true;
+			}
+		} catch (Exception x) {
+			Log.e(TAG, "can't verify digest: " + x.getMessage());
+		}
+		
+		return result;
 	}
 	
 	/** 

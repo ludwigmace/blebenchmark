@@ -6,9 +6,12 @@ public interface BleStatusCallback {
 	 * Callback executed when your peer receives a message 
 	 * 
 	 * @param remoteAddress Bluetooth address of the remote peer, only useful as an index to identify your peer
+	 * @param parentMessageId Identifies which message this is in relation to the peer
+	 * @param messageIntact If calculated hash of payload matches payload sent on initial packet
 	 * @param MessageBytes Raw byte payload of the message that you must now operate on
+	 * 
 	 */
-	public void handleReceivedMessage(String remoteAddress, byte[] MessageBytes);
+	public void handleReceivedMessage(String remoteAddress, int parentMessageId, boolean messageIntact, byte[] MessageBytes);
 	
 	/**
 	 * If your client is in Peripheral mode, this notifies your application that your Advertising status has changed; ie, are you visible to scanning Centrals or not?
@@ -23,7 +26,24 @@ public interface BleStatusCallback {
 	 * @param remoteAddress Bluetooth address (just used as an index, could be anything) of the peer to whom BleMessenger delivered the message
 	 * @param payloadDigest Hex digest of the delivered message
 	 */
-	public void messageDelivered(String remoteAddress, String payloadDigest);
+	public void messageDelivered(String remoteAddress, String payloadDigest, int parentMessageId);
+
+	/**
+	 * Callback executed when a message is begun sending. 
+	 * 
+	 * @param remoteAddress Bluetooth address (just used as an index, could be anything) of the peer to whom BleMessenger is sending the message
+	 * @param payloadDigest Hex digest of the outgoing message
+	 */
+	public void messageSendStart(String remoteAddress, String payloadDigest, int parentMessageId);
+	
+	/**
+	 * Callback executed when progress needs to be reporting to calling application
+	 * 
+	 * @param remoteAddress Bluetooth address (just used as an index, could be anything) of the peer to whom BleMessenger is sending the message
+	 * @param payloadDigest Hex digest of the outgoing message
+	 * @param # of packets sent
+	 */
+	public void messageStatusUpdate(String remoteAddress, String payloadDigest, int parentMessageId, int packetsSent);
 	
 	/**
 	 * Callback executed when connection (Bluetooth or messenger) status has changed

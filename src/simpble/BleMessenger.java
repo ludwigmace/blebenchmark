@@ -360,12 +360,8 @@ public class BleMessenger {
 	
 	//TODO: change writeOut to indicate which particular message you're sending out
 	private void writeOut(String peerAddress) {
-
-
 		
-		// if i'm connected to you as a peripheral, and you are not yet subscribed, i should not be sending you
-		// any damn messages
-		
+
 		// look up the peer by their address (aka index)
 		BlePeer peer = peerMap.get(peerAddress);
 		
@@ -384,6 +380,10 @@ public class BleMessenger {
 		
 		int sent = 0;
 		int i = 0;
+		
+		bleStatusCallback.messageSendStart(peerAddress, ByteUtilities.bytesToHex(m.PayloadDigest), m.GetMessageNumber());
+		
+		int update_interval = (int) (bps.size() * 0.05);
 		
 		// loop over all our packets to send
 		for (i = 0; i < bps.size(); i++) {
@@ -412,6 +412,7 @@ public class BleMessenger {
 		    				flag_sent = bleCentral.submitCharacteristicWriteRequest(peerAddress, uuidFromBase("101"), nextPacket);
 		    				Log.v(TAG, "writing packet #" + i);
 		    			} else {
+		    				Thread.sleep(10);
 		    				flag_sent = blePeripheral.updateCharValue(peerAddress, uuidFromBase(peripheralTransport), nextPacket);
 		    			}
 		    		}
@@ -429,6 +430,11 @@ public class BleMessenger {
 			} else {
 				Log.v(TAG, "no BlePacket for index " + i + " and packetnum " + packet_num);
 				
+			}
+			
+			// if it's time to update the calling application on the sending progress, make the callback
+			if ((i % update_interval) == 0) {
+				bleStatusCallback.messageStatusUpdate(peerAddress, ByteUtilities.bytesToHex(m.PayloadDigest), m.GetMessageNumber(), i);
 			}
 			
 		}
@@ -622,9 +628,9 @@ public class BleMessenger {
     			// when peripheral receives a message, we wait until asked
     		}
     		
-    		
+    		boolean msgIntact = msgBeingBuilt.VerifyDigest();
     		// TODO: do we need to have a hash check?
-    		bleStatusCallback.handleReceivedMessage(remoteAddress, msgBeingBuilt.GetAllBytes());
+    		bleStatusCallback.handleReceivedMessage(remoteAddress, parentMessage, msgIntact, msgBeingBuilt.GetAllBytes());
     		
     		
 
@@ -691,7 +697,7 @@ public class BleMessenger {
 	    	if (missing_packet_count == 0) {
 	    		Log.v(TAG, "all sent, removing msg " + String.valueOf(msg_id) + " from queue");
 
-	    		bleStatusCallback.messageDelivered(remoteAddress, payloadDigest);
+	    		bleStatusCallback.messageDelivered(remoteAddress, payloadDigest, msg_id);
 	    		p.RemoveBleMessage(msg_id);
 	    		
 	    		outgoingMessageCounter--;
@@ -983,16 +989,16 @@ public class BleMessenger {
     		
 				byte[] ack = missingPacketsForPeer(peerAddress);
 				
-				Log.v("CHECK", "missing packets delivery:" + ByteUtilities.bytesToHex(ack));
 				
 				if (ack != null) {
 					
 					int msgid = ack[0];
 					int missing_total = (ack[1] & 0xFF) << 8 | ack[2] & 0xFF;
 					
-					bleStatusCallback.missingPackets(peerAddress, msgid, missing_total);
+					Log.v("CHECK", "missing packets delivery:" + peerAddress + ", " + ByteUtilities.bytesToHex(ack));
 					
 					bleCentral.submitCharacteristicWriteRequest(peerAddress, uuidFromBase("105"), ack);
+					bleStatusCallback.missingPackets(peerAddress, msgid, missing_total);
 					
 					// tell the remote person about this missing stuff, and then requeue
 					setupMessageStatusTimer(BUSINESS_TIMEOUT + p.CheckStale());

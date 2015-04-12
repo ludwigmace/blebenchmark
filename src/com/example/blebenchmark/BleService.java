@@ -31,6 +31,10 @@ public class BleService extends Service {
 	public static final String NEW_MESSAGE = "new_message";
 	public static final String INCOMPLETE_SEND = "incomplete_send";
 	public static final String INCOMPLETE_RECEIVE = "incomplete_recv";
+
+	public static final String MESSAGE_DELIVERED = "msg_delivered";
+	public static final String MESSAGE_START_SEND = "message_start_send";
+	public static final String MESSAGE_UPDATE = "message_update_progress";
 	
 
 	
@@ -204,30 +208,23 @@ public class BleService extends Service {
 		}
 
 		@Override
-		public void handleReceivedMessage(String remoteAddress, byte[] MessageBytes) {
+		public void handleReceivedMessage(String remoteAddress, int parentMessageId, boolean messageIntact, byte[] MessageBytes) {
 
 			final Intent intent = new Intent(ACTION_MSG_RECEIVED);
 			Bundle extras = new Bundle();
 			extras.putString("REMOTE_ADDR", remoteAddress);
 			extras.putByteArray("MSG_PAYLOAD", MessageBytes);
+			extras.putInt("PARENT_MSG_ID", parentMessageId);
+			extras.putBoolean("INTEGRITY_PASS", messageIntact);
 			
 			intent.putExtras(extras);
 			
 			sendBroadcast(intent);
 			
-			Log.v(TAG, "negotiating " + String.valueOf(System.currentTimeMillis()));
-			
-			
 		}
 
 		@Override
 		public void advertisingStatusUpdate(boolean isAdvertising) {
-			// TODO Auto-generated method stub
-			
-		}
-
-		@Override
-		public void messageDelivered(String remoteAddress, String payloadDigest) {
 			// TODO Auto-generated method stub
 			
 		}
@@ -248,6 +245,49 @@ public class BleService extends Service {
 			extras.putString("REMOTE_ADDR", remoteAddress);
 			extras.putInt("PARENT_MSG_ID", messageId);
 			extras.putInt("MISSING_PACKETS", missingPacketCount);
+			
+			intent.putExtras(extras);
+			sendBroadcast(intent);
+			
+		}
+
+		@Override
+		public void messageDelivered(String remoteAddress, String payloadDigest, int parentMessageId) {
+			final Intent intent = new Intent(MESSAGE_DELIVERED);
+			
+			Bundle extras = new Bundle();
+			extras.putString("REMOTE_ADDR", remoteAddress);
+			extras.putInt("PARENT_MSG_ID", parentMessageId);			
+			extras.putString("MSG_HASH", payloadDigest);
+			
+			intent.putExtras(extras);
+			sendBroadcast(intent);
+			
+		}
+
+		@Override
+		public void messageSendStart(String remoteAddress, String payloadDigest, int parentMessageId) {
+			final Intent intent = new Intent(MESSAGE_START_SEND);
+			
+			Bundle extras = new Bundle();
+			extras.putString("REMOTE_ADDR", remoteAddress);
+			extras.putInt("PARENT_MSG_ID", parentMessageId);			
+			extras.putString("MSG_HASH", payloadDigest);
+			
+			intent.putExtras(extras);
+			sendBroadcast(intent);
+			
+		}
+
+		@Override
+		public void messageStatusUpdate(String remoteAddress, String payloadDigest, int parentMessageId, int packetsSent) {
+			final Intent intent = new Intent(MESSAGE_UPDATE);
+			
+			Bundle extras = new Bundle();
+			extras.putString("REMOTE_ADDR", remoteAddress);
+			extras.putInt("PARENT_MSG_ID", parentMessageId);			
+			extras.putString("MSG_HASH", payloadDigest);
+			extras.putInt("PACKETS_SENT", packetsSent);
 			
 			intent.putExtras(extras);
 			sendBroadcast(intent);

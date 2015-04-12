@@ -279,8 +279,16 @@ public class BleCentral {
 		
     	boolean charWrote = false;
 
-    	BluetoothGatt gatt = gattS.get(remoteAddr);
-    	BluetoothGattCharacteristic writeChar = gatt.getService(UUID.fromString(strSvcUuidBase)).getCharacteristic(uuidChar);
+    	BluetoothGatt gatt = null;
+    	BluetoothGattCharacteristic writeChar = null;
+    	
+    	try {
+    		gatt = gattS.get(remoteAddr);
+    		writeChar = gatt.getService(UUID.fromString(strSvcUuidBase)).getCharacteristic(uuidChar);
+    	} catch (Exception e) {
+    		Log.v(TAG, "central write err: " + e.getMessage());
+    		return false;
+    	}
     	
     	writeChar.setValue(val);
     	writeChar.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);

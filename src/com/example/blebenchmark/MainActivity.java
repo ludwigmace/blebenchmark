@@ -97,9 +97,17 @@ public class MainActivity extends Activity {
             // we've received a whole message, get its payload and the buddy who sent it
             if (action == BleService.ACTION_MSG_RECEIVED) {
             	BenchBuddy buddy = benchBuddies.get(extras.getString("REMOTE_ADDR"));
+            	
     			byte[] payload = extras.getByteArray("MSG_PAYLOAD");
+    			final String remoteAddress = extras.getString("REMOTE_ADDR");
+    			final int parentMessageId = extras.getInt("PARENT_MSG_ID");
+    			final boolean messageIntact = extras.getBoolean("INTEGRITY_PASS");
     			
-    			setBanner("fully received msg of " + String.valueOf(payload.length));
+    			if (messageIntact) {
+    				messageDetails.setText("rcvd msg " + parentMessageId + ", " + payload.length + " bytes, " + "good");
+    			} else {
+    				messageDetails.setText("rcvd msg " + parentMessageId + ", " + payload.length + " bytes, " + "bad");
+    			}
     			
     			stopReceive.setText("stop recv:" + String.valueOf(System.currentTimeMillis()));
     			
@@ -171,6 +179,47 @@ public class MainActivity extends Activity {
                 	final int current_packet = extras.getInt("CURRENT_PACKET");
                 	
                 	setBanner("msg " + String.valueOf(parent_msgid) + " - " + String.valueOf(current_packet) + " packet");
+                } else {
+                	setBanner("new msg, extras null");
+                }
+            }
+            
+            if (action == BleService.MESSAGE_DELIVERED) {
+
+            	
+                if (extras != null) {
+                	final String remote_addr = extras.getString("REMOTE_ADDR");
+                	final int parent_msgid = extras.getInt("PARENT_MSG_ID");
+                	final String msg_hash = extras.getString("MSG_HASH");
+                	
+                	setBanner("msg " + String.valueOf(parent_msgid) + " delivered to " + remote_addr);
+                } else {
+                	setBanner("new msg, extras null");
+                }
+            }
+            
+            if (action == BleService.MESSAGE_START_SEND) {
+                if (extras != null) {
+                	
+                	final String remote_addr = extras.getString("REMOTE_ADDR");
+                	final int parent_msgid = extras.getInt("PARENT_MSG_ID");
+                	final String msg_hash = extras.getString("MSG_HASH");
+                	
+                	setBanner("sending msg " + String.valueOf(parent_msgid) + " to " + remote_addr);
+                } else {
+                	setBanner("new msg, extras null");
+                }
+            }
+            
+            if (action == BleService.MESSAGE_UPDATE) {
+                if (extras != null) {
+                	
+                	final String remote_addr = extras.getString("REMOTE_ADDR");
+                	final int parent_msgid = extras.getInt("PARENT_MSG_ID");
+                	final String msg_hash = extras.getString("MSG_HASH");
+                	final int packets_sent = extras.getInt("PACKETS_SENT");
+                	
+                	setBanner("msg " + String.valueOf(parent_msgid) + " - " + String.valueOf(packets_sent) + " packets sent");
                 } else {
                 	setBanner("new msg, extras null");
                 }
@@ -248,6 +297,9 @@ public class MainActivity extends Activity {
         intentFilter.addAction(BleService.INCOMPLETE_SEND);
         intentFilter.addAction(BleService.INCOMPLETE_RECEIVE);
         
+        intentFilter.addAction(BleService.MESSAGE_DELIVERED);
+        intentFilter.addAction(BleService.MESSAGE_START_SEND);
+        intentFilter.addAction(BleService.MESSAGE_UPDATE);
         
         return intentFilter;
     }
