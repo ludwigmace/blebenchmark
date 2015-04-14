@@ -144,7 +144,17 @@ public class MainActivity extends Activity {
             }
             
             if (action == BleService.INCOMPLETE_SEND) {
-            	setBanner(extras.getString("REMOTE_ADDR") + "(" + extras.getInt("PARENT_MSG_ID") + ")"  + " lacking " + extras.getInt("MISSING_PACKETS") + " packets");
+            	BenchBuddy b = benchBuddies.get(extras.getString("REMOTE_ADDR"));
+            	
+            	final int parent_msgid = extras.getInt("PARENT_MSG_ID");
+            	final int missing_packets = extras.getInt("MISSING_PACKETS");
+            	final int retry_count = extras.getInt("RETRY_COUNT");
+            	
+            	BenchMessage m = b.benchMessages.get(parent_msgid);
+            	
+            	m.IncompleteSends++;
+            	
+            	setBanner("msg " + parent_msgid + ", retry " + retry_count + ", lacking " + missing_packets + " packets");
             }
             
             if (action == BleService.INCOMPLETE_RECEIVE) {
@@ -155,7 +165,7 @@ public class MainActivity extends Activity {
             	
             	BenchMessage m = b.benchMessages.get(parent_msgid);
             	
-            	m.IncompleteReceives = m.IncompleteReceives + 1;
+            	m.IncompleteReceives++;
             	
             	
             	setBanner("incoming msg " + extras.getInt("PARENT_MSG_ID") + " lacking " + extras.getInt("MISSING_PACKETS") + " packets");

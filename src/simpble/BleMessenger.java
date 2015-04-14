@@ -361,7 +361,8 @@ public class BleMessenger {
 	//TODO: change writeOut to indicate which particular message you're sending out
 	private void writeOut(String peerAddress) {
 		
-
+		Log.v(TAG, "start send at " + System.currentTimeMillis());
+		
 		// look up the peer by their address (aka index)
 		BlePeer peer = peerMap.get(peerAddress);
 		
@@ -449,7 +450,7 @@ public class BleMessenger {
 		
 		// we sent packets out, so clear our pending list (we'll requeue missing later)
 		m.ClearPendingPackets();
-
+		
 		RequestAcknowledgment(peer);
 		
 		
@@ -477,11 +478,13 @@ public class BleMessenger {
 			if (p.TransportTo) {
 				bleCentral.submitCharacteristicReadRequest(peerAddress, uuidFromBase("105"));
 				request_sent = true;
+				Log.v(TAG, "request ACK at " + System.currentTimeMillis());
 			}
 		} else {
 			if (p.TransportTo) {
 				//TODO: peripheral needs to send message to central requesting acknowledgment which central will write to 105
 				request_sent = true;
+				Log.v(TAG, "waiting for ACK notify at " + System.currentTimeMillis());
 			}
 		}
 		
@@ -561,8 +564,6 @@ public class BleMessenger {
 	 */
     private void incomingMessage(String remoteAddress, UUID remoteCharUUID, byte[] incomingBytes) {
 		int parentMessagePacketTotal = 0;
-		
-		Log.v(TAG, ByteUtilities.bytesToHex(incomingBytes));
 		
 		// if our msg is under a few bytes it can't be valid; return
     	if (incomingBytes.length < 5) {
@@ -685,9 +686,11 @@ public class BleMessenger {
     	BlePeer p = peerMap.get(remoteAddress);
     	
     	if (p==null) {
-    		bleStatusCallback.headsUp("m: no peer found for address " + remoteAddress);
+    		Log.e(TAG, "no peer found for address " + remoteAddress);
     		return;
     	}
+
+    	p.MarkActive();
     	
     	// get the message ID to check on
     	int msg_id = incomingBytes[0] & 0xFF;
@@ -707,8 +710,6 @@ public class BleMessenger {
 			
 			String payloadDigest = messageMap.get(remoteAddress + "_" + msg_id);
 			
-			bleStatusCallback.headsUp("m: bleMessage found at index " + String.valueOf(msg_id));
-
 			// how many missing packets?  if 0, we're all set; call it done
 	    	int missing_packet_count = incomingBytes[1] & 0xFF << 8 | (incomingBytes[2] & 0xFF);
 	    	Log.v(TAG, "missing packet count:" + missing_packet_count);
@@ -727,7 +728,11 @@ public class BleMessenger {
 	    		}
 	    		
 	    	} else {
+	    		// we've received notice that a message wasn't completely sent
+	    		// the single packet we're receiving can hold up to 5 ranges of missing packets
 	    		Log.v(TAG, "msg " + String.valueOf(msg_id) + " not sent, checking missing packets");
+	    		
+	    		m.Retries++;
 	    		
 	    		// read the missing packet numbers into an array
 	    		byte[] missingPackets = Arrays.copyOfRange(incomingBytes, 3, incomingBytes.length);
@@ -736,7 +741,10 @@ public class BleMessenger {
 	    		
 	    		SparseIntArray s = new SparseIntArray();
 	    		int packet_requeue_count = 0;
+
+	    		Log.v(TAG, "start requeue at " + System.currentTimeMillis());
 	    		// at most we can have 5 triplets of ranges
+	    		// pull out the packets we need to requeue
 	    		for (int i = 0; i < 5; i++) {
 	    			int tripletStart = i * 3;
 	    			
@@ -756,9 +764,10 @@ public class BleMessenger {
 
 	    		
 	    		m.PacketReQueue(s);
+	    		Log.v(TAG, "stop requeue at " + System.currentTimeMillis());
 	    		
 
-	    		bleStatusCallback.packetsRequeued(remoteAddress, msg_id, packet_requeue_count);
+	    		bleStatusCallback.packetsRequeued(remoteAddress, msg_id, packet_requeue_count, m.Retries);
 	    		
 	    		Log.v(TAG, "message now has " + String.valueOf(m.GetPendingPackets().size()) + " packets to send");
 	    		
@@ -809,7 +818,9 @@ public class BleMessenger {
     	public void incomingMissive(String remoteAddress, UUID remoteCharUUID, byte[] incomingBytes) {
     		// based on remoteAddress, UUID of remote characteristic, put the incomingBytes into a Message
     		
+
     		if (remoteCharUUID.compareTo(uuidFromBase("105")) == 0) {
+        		// as a peripheral, we're getting an ack packet
     			processMessageSendAcknowledgment(remoteAddress, remoteCharUUID, incomingBytes);    			
     		} else  {
     			incomingMessage(remoteAddress, remoteCharUUID, incomingBytes);	

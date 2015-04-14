@@ -121,26 +121,24 @@ public class BlePeripheral {
 		
 		// set the characteristic's value
 		bgc.setValue(value);
-		Log.v(TAG, "set characteristic value of size:" + String.valueOf(value.length));
 
 		// if these are notify or indicate characteristics, send an update/indication
 		if (((bgc.getProperties() & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0)
 				|| ((bgc.getProperties() & BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0)) {
 
-			Log.v(TAG, "characteristic Notify/Indicate");
-
 			if (mySubscribers.get(bgc) != null) {
-				Log.v(TAG, "client has subscribed; try to send");
+				//Log.v(TAG, "client has subscribed; try to send");
 				
 				BluetoothDevice btClient = mySubscribers.get(bgc);
 				sent = btGattServer.notifyCharacteristicChanged(btClient, bgc, ((bgc.getProperties() & BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0));
-				
+
+				/*
 				if (sent) {
 					Log.v(TAG, "send SUCCESS");
 				} else {
 					Log.v(TAG, "send FAILURE");
 				}
-				
+				*/
 			} else {
 				Log.v(TAG, "No Subscribers!");
 			}

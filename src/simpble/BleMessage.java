@@ -54,7 +54,7 @@ public class BleMessage {
 	// the raw bytes of this message
 	private byte[] allBytes;
 	
-	
+	public int Retries;
 
 	// initializes our list of BlePackets, current counter, and sent status
 	public BleMessage() {
@@ -62,6 +62,7 @@ public class BleMessage {
 		currentPacketCounter = 0;
 		pendingPacketStatus = false;
 		ReceiptAcknowledged = false;
+		Retries = 0;
 	}
 	
 	// allows calling program to set which number identifies this message

@@ -81,7 +81,7 @@ public interface BleStatusCallback {
 	public void incomingPacket(String remoteAddress, String payloadDigest, int parentMessageId, int packetsSent);
 	
 	
-	public void packetsRequeued(String remoteAddress, int messageId, int missingPacketCount);
+	public void packetsRequeued(String remoteAddress, int messageId, int missingPacketCount, int retryCount);
 	
 	public void missingPackets(String remoteAddress, int messageId, int missingPacketCount);
 	

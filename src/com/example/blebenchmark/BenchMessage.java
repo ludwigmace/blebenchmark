@@ -20,4 +20,6 @@ public class BenchMessage {
 	
 	public int IncompleteReceives;
 	
+	public int IncompleteSends;
+	
 }

@@ -122,7 +122,7 @@ public class BleService extends Service {
 	BleStatusCallback bleMessageStatus = new BleStatusCallback() {
 		
 		@Override
-		public void packetsRequeued(String remoteAddress, int messageId, int missingPacketCount) {
+		public void packetsRequeued(String remoteAddress, int messageId, int missingPacketCount, int retryCount) {
 			
 			Log.v(TAG, "new intent INCOMPLETE_SEND for " + remoteAddress);
 			
@@ -132,6 +132,7 @@ public class BleService extends Service {
 			extras.putString("REMOTE_ADDR", remoteAddress);
 			extras.putInt("PARENT_MSG_ID", messageId);
 			extras.putInt("MISSING_PACKETS", missingPacketCount);
+			extras.putInt("RETRY_COUNT", retryCount);
 			
 			intent.putExtras(extras);
 			sendBroadcast(intent);
