@@ -20,9 +20,9 @@ import android.os.Handler;
 import android.util.Log;
 
 @TargetApi(18)
-public class BleCentralCompat {
+public class BleCentralCompat extends BleCentralShared {
 	
-	private static final String TAG = "COMPAT";
+	private static final String TAG = "BLEC";
 	private static String CLIENT_CHARACTERISTIC_CONFIG = "00002902-0000-1000-8000-00805f9b34fb";
 	
 	// we need the system context to perform Gatt operations
@@ -70,6 +70,7 @@ public class BleCentralCompat {
      */
     BleCentralCompat(BluetoothAdapter btA, Context ctx, BleCentralHandler myHandler, String serviceUuidBase, long defaultScanInMs, int scanMode) {
 
+    	Log.v(TAG, "central compat instantiated");
     	// scanMode is just there so we have the same constructor
     	
     	scanDuration = defaultScanInMs;

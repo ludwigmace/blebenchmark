@@ -56,7 +56,7 @@ public class BleMessenger {
     
     // global variables to handle Central operations and Peripheral operations
     //private static BleCentral bleCentral = null;
-    private static BleCentralCompat bleCentral = null;
+    private static BleCentralShared bleCentral = null;
     private static BlePeripheral blePeripheral = null;
     
     // callback for handling events from BleCentral and BlePeripheral
@@ -128,8 +128,10 @@ public class BleMessenger {
 		}
 		
 		//bleCentral = new BleCentral(btAdptr, ctx, centralHandler, uuidServiceBase, 3000, ScanSettings.SCAN_MODE_BALANCED);
-		bleCentral = new BleCentralCompat(btAdptr, ctx, centralHandler, uuidServiceBase, 3000, SCAN_BALANCED);
+		//bleCentral = new BleCentralCompat(btAdptr, ctx, centralHandler, uuidServiceBase, 3000, SCAN_BALANCED);
 				
+		bleCentral = BleCentralShared.getCentralShared(btAdptr, ctx, centralHandler, uuidServiceBase, 3000, SCAN_BALANCED);
+		
 		serviceDef.add(new BleCharacteristic("data_write", uuidFromBase("101"), BleGattCharacteristic.GATT_WRITE));
 		serviceDef.add(new BleCharacteristic("data_notify", uuidFromBase("102"), BleGattCharacteristic.GATT_NOTIFY));
 		serviceDef.add(new BleCharacteristic("data_indicate", uuidFromBase("103"), BleGattCharacteristic.GATT_INDICATE));

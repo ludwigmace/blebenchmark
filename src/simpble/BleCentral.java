@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import android.annotation.TargetApi;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -24,7 +25,7 @@ import android.os.Handler;
 import android.os.ParcelUuid;
 import android.util.Log;
 
-public class BleCentral {
+public class BleCentral extends BleCentralShared {
 	
 	private static final String TAG = "BLEC";
 	private static String CLIENT_CHARACTERISTIC_CONFIG = "00002902-0000-1000-8000-00805f9b34fb";
@@ -56,6 +57,9 @@ public class BleCentral {
     // bluetooth gatt functionality pointed to a particular remote server
     private Map<String, BluetoothGatt> gattS;
     
+    // bluetooth gatt functionality pointed to a particular remote server
+    private Map<String, BluetoothDevice> devicesByAddress;
+    
     // scan duration
     private long scanDuration;
 
@@ -78,6 +82,8 @@ public class BleCentral {
      * @param ScanMode - use one of these: ScanSettings.SCAN_MODE_BALANCED; ScanSettings.SCAN_MODE_LOW_LATENCY, ScanSettings.SCAN_MODE_LOW_POWER
      */
     BleCentral(BluetoothAdapter btA, Context ctx, BleCentralHandler myHandler, String serviceUuidBase, long defaultScanInMs, int ScanMode) {
+    	
+    	Log.v(TAG, "central new instantiated");
     	
     	scanDuration = defaultScanInMs;
     	
