@@ -152,9 +152,14 @@ public class MainActivity extends Activity {
             	
             	BenchMessage m = b.benchMessages.get(parent_msgid);
             	
-            	m.IncompleteSends++;
+            	if (m != null) {
+            		m.IncompleteSends++;
+                	setBanner("msg " + parent_msgid + ", retry " + retry_count + ", lacking " + missing_packets + " packets");
+            	} else {
+            		setBanner("unidentified msg " + parent_msgid);
+            	}
             	
-            	setBanner("msg " + parent_msgid + ", retry " + retry_count + ", lacking " + missing_packets + " packets");
+
             }
             
             if (action == BleService.INCOMPLETE_RECEIVE) {

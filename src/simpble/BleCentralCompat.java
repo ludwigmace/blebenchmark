@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import android.annotation.TargetApi;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
@@ -14,19 +15,14 @@ import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
-import android.bluetooth.le.BluetoothLeScanner;
-import android.bluetooth.le.ScanCallback;
-import android.bluetooth.le.ScanFilter;
-import android.bluetooth.le.ScanResult;
-import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.os.Handler;
-import android.os.ParcelUuid;
 import android.util.Log;
 
-public class BleCentral {
+@TargetApi(18)
+public class BleCentralCompat {
 	
-	private static final String TAG = "BLEC";
+	private static final String TAG = "COMPAT";
 	private static String CLIENT_CHARACTERISTIC_CONFIG = "00002902-0000-1000-8000-00805f9b34fb";
 	
 	// we need the system context to perform Gatt operations
@@ -56,17 +52,12 @@ public class BleCentral {
     // bluetooth gatt functionality pointed to a particular remote server
     private Map<String, BluetoothGatt> gattS;
     
+    // bluetooth gatt functionality pointed to a particular remote server
+    private Map<String, BluetoothDevice> devicesByAddress;
+    
     // scan duration
     private long scanDuration;
-
-    // scanning object
-    private BluetoothLeScanner bleScanner;
     
-    // scan settings
-    private ScanSettings bleScanSettings;
-    
-    // scan filter
-    private List<ScanFilter> bleScanFilter;
     
     /**
      * A helper class for dealing with Bluetooth Central operations
@@ -77,11 +68,15 @@ public class BleCentral {
      * @param defaultScanInMs milliseconds to scan when given the scan command
      * @param ScanMode - use one of these: ScanSettings.SCAN_MODE_BALANCED; ScanSettings.SCAN_MODE_LOW_LATENCY, ScanSettings.SCAN_MODE_LOW_POWER
      */
-    BleCentral(BluetoothAdapter btA, Context ctx, BleCentralHandler myHandler, String serviceUuidBase, long defaultScanInMs, int ScanMode) {
+    BleCentralCompat(BluetoothAdapter btA, Context ctx, BleCentralHandler myHandler, String serviceUuidBase, long defaultScanInMs, int scanMode) {
+
+    	// scanMode is just there so we have the same constructor
     	
     	scanDuration = defaultScanInMs;
     	
     	centralBTA = btA;
+    	
+    	devicesByAddress = new HashMap<String, BluetoothDevice>();
     	
     	boolean validUuidBase = false;
     	
@@ -114,17 +109,6 @@ public class BleCentral {
         
         gattS = new HashMap<String, BluetoothGatt>();
         
-        ScanSettings.Builder sb = new ScanSettings.Builder();
-        sb.setReportDelay(0); // report results immediately
-        sb.setScanMode(ScanMode); // options are: ScanSettings.SCAN_MODE_BALANCED; ScanSettings.SCAN_MODE_LOW_LATENCY, ScanSettings.SCAN_MODE_LOW_POWER;
-        bleScanSettings = sb.build();
-        
-        // only report devices that contain our desired service uuid
-        ScanFilter.Builder sf = new ScanFilter.Builder();
-        sf.setServiceUuid(ParcelUuid.fromString(strSvcUuidBase));
-        bleScanFilter = new ArrayList<ScanFilter>();
-        bleScanFilter.add(sf.build());
-        
     }
     
     /**
@@ -141,9 +125,22 @@ public class BleCentral {
      * @param btAddress Bluetooth address of a potential peer this central client will try to connect to
      */
     public void connectAddress(String btAddress){
-    	Log.v(TAG, "connect to " + btAddress);
-    	BluetoothDevice b = centralBTA.getRemoteDevice(btAddress);
-    	b.connectGatt(ctx, false, mGattCallback);
+    	final BluetoothDevice b = centralBTA.getRemoteDevice(btAddress);
+    	final String a = btAddress;
+    	
+    	Handler scanHandler = new Handler(ctx.getMainLooper());
+    	Log.v(TAG, "make a runnable from thread " + Thread.currentThread().getName());
+    	final Runnable r = new Runnable() {
+    		public void run() {
+    	    	Log.v(TAG, "connect to " + a + " thread " + Thread.currentThread().getName());
+    			b.connectGatt(ctx, true, mGattCallback);    			
+    			Log.v(TAG, "called 'connectGatt'");
+    		}
+    	};
+    	
+    	// delay for half a section
+    	scanHandler.postDelayed(r, 500);
+
     }
     
     /**
@@ -308,24 +305,15 @@ public class BleCentral {
      * This is implemented here pretty much to deal with scan results
      * TODO: deal with failed scans, check into batch scans
      */
-    private ScanCallback scanCallback = new ScanCallback() {
-
-    	public void onBatchScanResults(List<ScanResult> results) {
-    		
-    	}
+    //private ScanCallback scanCallback = new ScanCallback() {
+    private BluetoothAdapter.LeScanCallback scanCallback = new BluetoothAdapter.LeScanCallback() {
     	
-    	public void onScanFailed (int errorCode) {
-    		
-    	}
-    	
-    	public void onScanResult (int callbackType, ScanResult result) {
-    		
-    		Log.v(TAG, "found a device " + result.getDevice());
-    		// if we haven't already gotten the device, then add it to our list of found devices
-			if (!foundDevices.contains(result.getDevice())) {
-				foundDevices.add(result.getDevice());
+        @Override
+        public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
+			if (!foundDevices.contains(device)) {
+				foundDevices.add(device);
 	    	}
-    	}
+        }
     	
     };
     
@@ -334,27 +322,25 @@ public class BleCentral {
      * Initiate a scan for peripheral devices - or stop a scan.
      * @param enable Boolean will pretty much always be true, but if you wanna stop an ongoing scan then pass in False
      */
+    @SuppressWarnings("deprecation")
+	@TargetApi(18)
     public void scanForPeripherals(final boolean enable) {
     	final long SCAN_PERIOD = scanDuration;
     	
         if (enable) {
-        	if (bleScanner == null) {
-        		bleScanner = centralBTA.getBluetoothLeScanner();
-        	}
 
         	// call STOP after SCAN_PERIOD ms, which will spawn a thread to stop the scan
             mHandler.postDelayed(new Runnable() {
                 @Override
+                @TargetApi(18)
                 public void run() {
                     mScanning = false;
                     
-                    if (bleScanner != null) {
-                    	bleScanner.stopScan(scanCallback);
-                    }
+                    centralBTA.stopLeScan(scanCallback);
 
         			bleCentralHandler.intakeFoundDevices(foundDevices);
         			Log.v(TAG, "stopscan, " + String.valueOf(foundDevices.size()) + " devices, thread "+ Thread.currentThread().getName());
-        			bleScanner = null;
+
                 }
             }, SCAN_PERIOD);
 
@@ -363,16 +349,15 @@ public class BleCentral {
             
             Log.v(TAG, "scan started");
 
-            bleScanner.startScan(bleScanFilter, bleScanSettings, scanCallback);
+            centralBTA.startLeScan(scanCallback);
 
         } else {
         	
         	// the "enable" variable passed was False, so turn scanning off
             mScanning = false;
-            if (bleScanner != null) {
-            	bleScanner.stopScan(scanCallback);
-            }
-            bleScanner = null;
+
+            centralBTA.stopLeScan(scanCallback);
+
             
         }
 

@@ -32,6 +32,11 @@ public class BleMessenger {
 	public static final int CONNECTION_CONNECTED = 1;
 	public static final int CONNECTION_NEGOTIATING = 2;
 	
+	public static final int SCAN_LOW = 0;
+	public static final int SCAN_BALANCED = 1;
+	public static final int SCAN_HIGH = 2;
+	
+	
 	private boolean CheckAck;
 	private boolean NeedSend;
 	
@@ -50,7 +55,8 @@ public class BleMessenger {
     private static String uuidServiceBase = "73A20000-2C47-11E4-8C21-0800200C9A66";
     
     // global variables to handle Central operations and Peripheral operations
-    private static BleCentral bleCentral = null; 
+    //private static BleCentral bleCentral = null;
+    private static BleCentralCompat bleCentral = null;
     private static BlePeripheral blePeripheral = null;
     
     // callback for handling events from BleCentral and BlePeripheral
@@ -121,7 +127,8 @@ public class BleMessenger {
 			blePeripheral = new BlePeripheral(uuidServiceBase, ctx, btAdptr, btMgr, peripheralHandler);
 		}
 		
-		bleCentral = new BleCentral(btAdptr, ctx, centralHandler, uuidServiceBase, 3000, ScanSettings.SCAN_MODE_BALANCED);
+		//bleCentral = new BleCentral(btAdptr, ctx, centralHandler, uuidServiceBase, 3000, ScanSettings.SCAN_MODE_BALANCED);
+		bleCentral = new BleCentralCompat(btAdptr, ctx, centralHandler, uuidServiceBase, 3000, SCAN_BALANCED);
 				
 		serviceDef.add(new BleCharacteristic("data_write", uuidFromBase("101"), BleGattCharacteristic.GATT_WRITE));
 		serviceDef.add(new BleCharacteristic("data_notify", uuidFromBase("102"), BleGattCharacteristic.GATT_NOTIFY));
@@ -413,11 +420,11 @@ public class BleMessenger {
 					
 		    		if (nextPacket != null) {
 		    			if (peer.ConnectedAs.equalsIgnoreCase("central")) {
-		    				Thread.sleep(100); // wait 100 ms in between sends
+		    				Thread.sleep(50); // wait 100 ms in between sends
 		    				flag_sent = bleCentral.submitCharacteristicWriteRequest(peerAddress, uuidFromBase("101"), nextPacket);
 		    				Log.v(TAG, "writing packet #" + i);
 		    			} else {
-		    				Thread.sleep(8);
+		    				Thread.sleep(10);
 		    				flag_sent = blePeripheral.updateCharValue(peerAddress, uuidFromBase(peripheralTransport), nextPacket);
 		    			}
 		    		}
@@ -674,7 +681,7 @@ public class BleMessenger {
     }
     
     /**
-     * A peer sent me some packets requesting that I acknowledge a packet
+     * Peripheral received packets
      * 
      * @param remoteAddress
      * @param remoteCharUUID
@@ -766,7 +773,7 @@ public class BleMessenger {
 	    		m.PacketReQueue(s);
 	    		Log.v(TAG, "stop requeue at " + System.currentTimeMillis());
 	    		
-
+	    		// let the calling application know that we've requeued packets
 	    		bleStatusCallback.packetsRequeued(remoteAddress, msg_id, packet_requeue_count, m.Retries);
 	    		
 	    		Log.v(TAG, "message now has " + String.valueOf(m.GetPendingPackets().size()) + " packets to send");
@@ -1020,7 +1027,10 @@ public class BleMessenger {
     		// only go through this rigamarole if you're connected as a central
     		if (p.ConnectedAs.equalsIgnoreCase("central") && p.CheckStale() > 1000) {
     		
+    			// build  missing packets for your peer
+    			Log.v(TAG, "start build missing packets: " + System.currentTimeMillis());
 				byte[] ack = missingPacketsForPeer(peerAddress);
+				Log.v(TAG, "done build missing packets: " + System.currentTimeMillis());
 				
 				
 				if (ack != null) {
@@ -1032,9 +1042,10 @@ public class BleMessenger {
 					
 					bleCentral.submitCharacteristicWriteRequest(peerAddress, uuidFromBase("105"), ack);
 					bleStatusCallback.missingPackets(peerAddress, msgid, missing_total);
-					
+				
+					//Log.v(TAG, "setup timer for " + (BUSINESS_TIMEOUT + p.CheckStale()) + " milliseconds");
 					// tell the remote person about this missing stuff, and then requeue
-					setupMessageStatusTimer(BUSINESS_TIMEOUT + p.CheckStale());
+					setupMessageStatusTimer(BUSINESS_TIMEOUT);
 					messageTimerSet = true;
 					break;
 				}

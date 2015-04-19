@@ -98,14 +98,10 @@ public class BleMessage {
 			
 			for (int x=start; x <= (start+offset); x++) {
 				BlePacket p = null;
-				Log.v(TAG, "requeue packet " + x);
-				
 				p = messagePackets.get(x);
-				
 				pendingPackets.put(x, p);
 			}
 			
-
 		}
 		
 		return success;

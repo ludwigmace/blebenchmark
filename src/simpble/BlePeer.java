@@ -141,8 +141,6 @@ public class BlePeer {
 	
 	public BleMessage getBleMessageOut() {
 		
-		Log.v(TAG, "peerMessagesOut.size is " + String.valueOf(peerMessagesOut.size()) + ", max msg: " + MaxMessageCounter);
-		
 		// get the highest priority (lowest index) message to send out
 		int keyat = 0;
 		
