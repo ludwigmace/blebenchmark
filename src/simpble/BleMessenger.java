@@ -422,7 +422,7 @@ public class BleMessenger {
 					
 		    		if (nextPacket != null) {
 		    			if (peer.ConnectedAs.equalsIgnoreCase("central")) {
-		    				Thread.sleep(50); // wait 100 ms in between sends
+		    				Thread.sleep(50); // wait 50 ms in between sends
 		    				flag_sent = bleCentral.submitCharacteristicWriteRequest(peerAddress, uuidFromBase("101"), nextPacket);
 		    				Log.v(TAG, "writing packet #" + i);
 		    			} else {
