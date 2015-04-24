@@ -34,5 +34,7 @@ public abstract class BleCentralShared {
 	public abstract void scanForPeripherals(final boolean enable);
 	public abstract void connectAddress(String btAddress);
 	public abstract boolean submitSubscription(String remoteAddr, UUID uuidChar);
+	public abstract void requestMtu(String remoteAddr);
+	public abstract int getMtu(String remoteAddr);
 	
 }

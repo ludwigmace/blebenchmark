@@ -72,6 +72,8 @@ public class BleCentral extends BleCentralShared {
     // scan filter
     private List<ScanFilter> bleScanFilter;
     
+    private Map<String, Integer> mtuMap;
+    
     /**
      * A helper class for dealing with Bluetooth Central operations
      * @param btA system bluetooth adapter
@@ -83,7 +85,7 @@ public class BleCentral extends BleCentralShared {
      */
     BleCentral(BluetoothAdapter btA, Context ctx, BleCentralHandler myHandler, String serviceUuidBase, long defaultScanInMs, int ScanMode) {
     	
-    	Log.v(TAG, "central new instantiated");
+    	Log.v(TAG, "central instantiated");
     	
     	scanDuration = defaultScanInMs;
     	
@@ -119,6 +121,8 @@ public class BleCentral extends BleCentralShared {
         serviceDef = new ArrayList<BleCharacteristic>();
         
         gattS = new HashMap<String, BluetoothGatt>();
+        mtuMap = new HashMap<String, Integer>();
+        
         
         ScanSettings.Builder sb = new ScanSettings.Builder();
         sb.setReportDelay(0); // report results immediately
@@ -150,6 +154,10 @@ public class BleCentral extends BleCentralShared {
     	Log.v(TAG, "connect to " + btAddress);
     	BluetoothDevice b = centralBTA.getRemoteDevice(btAddress);
     	b.connectGatt(ctx, false, mGattCallback);
+    }
+    
+    public void requestMtu(String btAddress) {
+    	gattS.get(btAddress).requestMtu(512);
     }
     
     /**
@@ -404,6 +412,20 @@ public class BleCentral extends BleCentralShared {
     	}
     	
     	@Override
+    	public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
+    		String remote = gatt.getDevice().getAddress();
+    		
+    		int finalMtu = 20;
+    		
+    		if (status == BluetoothGatt.GATT_SUCCESS) {
+    			finalMtu = mtu;
+    		}
+    		
+    		mtuMap.put(remote, finalMtu);
+    		
+    	}
+    	
+    	@Override
     	public void onDescriptorWrite (BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
 
     		// if this is a subscription write
@@ -430,6 +452,7 @@ public class BleCentral extends BleCentralShared {
 
                 // save a reference to this gatt server!
                 gattS.put(gatt.getDevice().getAddress(), gatt);
+                
                 gatt.discoverServices();
                 //Log.i(TAG, "Attempting to start service discovery:" + mBluetoothGatt.discoverServices());
 
@@ -532,5 +555,17 @@ public class BleCentral extends BleCentralShared {
             } 
         }
     };
+
+	@Override
+	public int getMtu(String remoteAddr) {
+		
+		int finalMtu = 0;
+		
+		if (mtuMap.get(remoteAddr) != null) {
+			finalMtu = mtuMap.get(remoteAddr);
+		}
+		
+		return finalMtu;
+	}
     
 }

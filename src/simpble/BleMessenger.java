@@ -372,6 +372,10 @@ public class BleMessenger {
 		
 		Log.v(TAG, "start send at " + System.currentTimeMillis());
 		
+		int mtu = bleCentral.getMtu(peerAddress);
+		
+		Log.v(TAG, "start send at " + System.currentTimeMillis() + " MTU: " + mtu);
+		
 		// look up the peer by their address (aka index)
 		BlePeer peer = peerMap.get(peerAddress);
 		
@@ -890,6 +894,10 @@ public class BleMessenger {
     		
     		BlePeer p  = peerMap.get(remoteAddress);
     		p.TransportFrom = true;
+    		
+    		int mtu = 0;
+    		
+    		bleCentral.requestMtu(remoteAddress);
     		
     	}
     	

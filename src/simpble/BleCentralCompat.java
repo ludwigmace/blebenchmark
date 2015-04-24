@@ -120,7 +120,15 @@ public class BleCentralCompat extends BleCentralShared {
     	scanDuration = duration;
     }
 
-
+    public void requestMtu(String remoteAddress) {
+    	
+    }
+    
+    public int getMtu(String remoteAddress) {
+    	return 20;
+    }
+    	
+    
     /**
      * Connect to a peer that you probably found by scanning
      * @param btAddress Bluetooth address of a potential peer this central client will try to connect to
