@@ -2,6 +2,7 @@ package com.example.blebenchmark;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -48,6 +49,9 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+
 public class MainActivity extends Activity {
 
 	protected static final String TAG = "BENCH";
@@ -67,7 +71,7 @@ public class MainActivity extends Activity {
 	RadioButton btnIndicate;
 	TextView textFP;
 	
-	
+	String statusLogText;
 
 	Context ctx;
 	
@@ -76,6 +80,7 @@ public class MainActivity extends Activity {
 	TextView startReceive;
 	TextView stopReceive;
 	TextView messageDetails;
+	TextView statusText;
 	
 	ImageView imageToSend;
 	
@@ -103,9 +108,30 @@ public class MainActivity extends Activity {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 		
+		String dbfile = "/data/data/com.example.blebenchmark/databases/friends";
+		String newfile = "/sdcard/friends.sqlite";
+		
+		File copyFrom = new File(dbfile);
+		File copyTo = new File(newfile);
+		
+		try {
+			FileUtils.copyFile(new FileInputStream(copyFrom), new FileOutputStream(copyTo));
+		} catch (FileNotFoundException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		
+		
 		// get a handle to our database
 		dB = new FriendsDb(this);
 		ctx = this;
+		
+		if (statusLogText == null) {
+			statusLogText = "";
+		}
 		
 		peripheralTransportMode = "notify";
 		
@@ -119,6 +145,8 @@ public class MainActivity extends Activity {
 		
 		addressesToFriends = new HashMap<String, String>();
 		
+        // get a pointer to the status text
+        statusText = (TextView) findViewById(R.id.status_log);
 		
 		//imageToSend = (ImageView) findViewById(R.id.img_to_send);
 		
@@ -179,6 +207,8 @@ public class MainActivity extends Activity {
 			peripheralTransportMode = "notify";
 		}
 		*/
+		
+
 		
 	}
     
@@ -280,6 +310,8 @@ public class MainActivity extends Activity {
 								// payload might be padded with zeroes, strip out trailing null bytes
 								messagePayload = ByteUtilities.trimmedBytes(messagePayload);
 								
+								logMessage("received encrypted payload of size " + messagePayload.length + "B at time " + System.currentTimeMillis());
+								
 								// load this payload into our hash to payload lookup
 								hashToPayload.put(ByteUtilities.bytesToHex(messageHash), messagePayload);
 				
@@ -310,6 +342,7 @@ public class MainActivity extends Activity {
 									
 									if (decryptedPayload != null) {
 										String msgtext = new String(ByteUtilities.trimmedBytes(decryptedPayload));
+										logMessage("decrypted msg of size " + ByteUtilities.trimmedBytes(decryptedPayload).length + "B at " + System.currentTimeMillis() + ":" + msgtext);
 										Log.v(TAG, "decrypted: " + msgtext);
 									} else {
 										Log.v(TAG, "empty decrypted payload!");
@@ -326,8 +359,10 @@ public class MainActivity extends Activity {
 							case MSGTYPE_ENCRYPTED_KEY:
 								messagePayload = ByteUtilities.trimmedBytes(messagePayload);
 								
-								Log.v(TAG, "aes key payload in: " + ByteUtilities.bytesToHex(messagePayload));
+								logMessage("received encrypted AES key msg of size " + messagePayload.length + "B at time " + System.currentTimeMillis());
 								
+								Log.v(TAG, "aes key payload in: " + ByteUtilities.bytesToHex(messagePayload));
+
 								byte[] incomingMessageHash = processIncomingKeyMsg(messagePayload);
 				
 								byte[] encryptedPayload = hashToPayload.get(ByteUtilities.bytesToHex(incomingMessageHash));
@@ -880,115 +915,129 @@ public class MainActivity extends Activity {
 		
 		ArrayList<ApplicationMessage> results = new ArrayList<ApplicationMessage>();
 		
+		logMessage("found " + c.getCount() + " message(s) for " + candidateFingerprint.substring(0,16));
+		
 		ApplicationMessage m = null; 
 
 		// if we have any messages
 		if (c.getCount() > 0) {
+			
+				// count these
+				int i = 1;
+				
 				//loop over these messages
 				while (c.moveToNext()) {
 				
-				m = new ApplicationMessage();
-				
-				String msg_content = c.getString(c.getColumnIndex(FriendsDb.KEY_M_CONTENT));
-				String msg_type = c.getString(c.getColumnIndex(FriendsDb.KEY_M_MSGTYPE));
-				String msg_signature = c.getString(c.getColumnIndex(FriendsDb.KEY_M_MSGID));
-				byte[] puk = c.getBlob(c.getColumnIndex(FriendsDb.KEY_F_PUK));
-				
-				if (msg_signature == null) {
-					msg_signature = "";
-				}
-				
-				m.RecipientFingerprint = ByteUtilities.hexToBytes(candidateFingerprint);
-				m.SenderFingerprint = ByteUtilities.hexToBytes(myFingerprint);  // should probably pull from database instead; for relaying of messages
-				m.ApplicationIdentifier = msg_signature;
-				
-				// in case we need to encrypt this message
-				byte[] msgbytes = null;
-				byte[] aesKeyEncrypted = null;
-
-				// if our message is meant to be encrypted, do that first
-				if (msg_type.equalsIgnoreCase("encrypted")) {
+					m = new ApplicationMessage();
 					
-					SecureRandom sr = new SecureRandom();
-					byte[] aeskey = new byte[32]; // 512 bit key
-					sr.nextBytes(aeskey);
-
-					byte[] iv = new byte[16];
-					sr.nextBytes(iv);
+					String msg_content = c.getString(c.getColumnIndex(FriendsDb.KEY_M_CONTENT));
+					String msg_type = c.getString(c.getColumnIndex(FriendsDb.KEY_M_MSGTYPE));
+					String msg_signature = c.getString(c.getColumnIndex(FriendsDb.KEY_M_MSGID));
+					byte[] puk = c.getBlob(c.getColumnIndex(FriendsDb.KEY_F_PUK));
 					
-					AESCrypt aes = null;
-					
-					try {
-						aes = new AESCrypt(aeskey, iv);
-
-					} catch (Exception e) {
-						Log.v(TAG, "can't instantiate AESCrypt");
+					if (msg_signature == null) {
+						msg_signature = "";
 					}
 					
-					if (aes != null) {
+					m.RecipientFingerprint = ByteUtilities.hexToBytes(candidateFingerprint);
+					m.SenderFingerprint = ByteUtilities.hexToBytes(myFingerprint);  // should probably pull from database instead; for relaying of messages
+					m.ApplicationIdentifier = msg_signature;
+					
+					// in case we need to encrypt this message
+					byte[] msgbytes = null;
+					byte[] aesKeyEncrypted = null;
+	
+					logMessage("message " + i + " is of type '" + msg_type + "', size " + msg_content.getBytes().length + "B");
+				
+					// if our message is meant to be encrypted, do that first
+					if (msg_type.equalsIgnoreCase("encrypted")) {
+						
+						SecureRandom sr = new SecureRandom();
+						byte[] aeskey = new byte[32]; // 256 bit key
+						sr.nextBytes(aeskey);
+	
+						logMessage("aes key generated, size " + aeskey.length + "B: " + ByteUtilities.bytesToHex(aeskey));
+						
+						byte[] iv = new byte[16];
+						sr.nextBytes(iv);
+						
+						logMessage("IV generated, size " + iv.length + "B");
+						
+						AESCrypt aes = null;
 						
 						try {
-							// prepend the initialization vector to the encrypted payload
-							msgbytes = Bytes.concat(iv, aes.encrypt(msg_content.getBytes()));
-						} catch (Exception x) {
-							Log.v(TAG, "encrypt error: " + x.getMessage());
+							aes = new AESCrypt(aeskey, iv);
+	
+						} catch (Exception e) {
+							Log.v(TAG, "can't instantiate AESCrypt");
 						}
-						
-						if (msgbytes != null) {
-							// encrypt our encryption key using our recipient's public key 							
+					
+						if (aes != null) {
+							
 							try {
-								aesKeyEncrypted = aes.encryptedSymmetricKey(puk);
-								Log.v(TAG, "encrypted aes key: " + ByteUtilities.bytesToHex(aesKeyEncrypted));
-							} catch (Exception e) {
-								Log.v(TAG, "couldn't encrypt aes key");	
+								// prepend the initialization vector to the encrypted payload
+								msgbytes = Bytes.concat(iv, aes.encrypt(msg_content.getBytes()));
+								logMessage("encrypted msg w/ prepended IV, size " + msgbytes.length + "B");
+							} catch (Exception x) {
+								Log.v(TAG, "encrypt error: " + x.getMessage());
 							}
-						} else {
-							Log.v(TAG, "couldnt encrypt message");
-							break;
+							
+							if (msgbytes != null) {
+								// encrypt our encryption key using our recipient's public key 							
+								try {
+									aesKeyEncrypted = aes.encryptedSymmetricKey(puk);
+									logMessage("AES key encrypted, size " + aesKeyEncrypted.length + "B, first 32B: " + ByteUtilities.bytesToHex(Arrays.copyOf(aesKeyEncrypted, 32)));
+									Log.v(TAG, "encrypted aes key: " + ByteUtilities.bytesToHex(aesKeyEncrypted));
+								} catch (Exception e) {
+									Log.v(TAG, "couldn't encrypt aes key");	
+								}
+							} else {
+								Log.v(TAG, "couldnt encrypt message");
+								break;
+							}
 						}
+					
+					} else {
+						msgbytes = msg_content.getBytes();
 					}
-					
-				} else {
-					msgbytes = msg_content.getBytes();
-				}
 				
-				if (msg_type.equalsIgnoreCase("encrypted")) {
+					if (msg_type.equalsIgnoreCase("encrypted")) {				
 					
+						m.MessageType = (byte)MSGTYPE_ENCRYPTED_PAYLOAD & 0xFF;
+						m.setPayload(msgbytes);
+						
+						ApplicationMessage m_key = new ApplicationMessage();
+						
+						// get the fingerprint from the Friend object
+						m_key.RecipientFingerprint = m.RecipientFingerprint;
+						
+						// gotta give it a pre-determined messagetype to know this is an encryption key
+						m_key.MessageType = (byte)MSGTYPE_ENCRYPTED_KEY & 0xFF;
+						
+						// get the sending fingerprint from the main message
+						m_key.SenderFingerprint = m.SenderFingerprint;
+						
+						m_key.ApplicationIdentifier = "key_" + msg_signature;
+						
+						// the payload needs to include the encrypted key, and the orig msg's fingerprint
+						// if the hash is a certain size, then we can assume the rest of the message is the
+						// encrypted portion of the aes key
+						byte[] aes_payload = Bytes.concat(m.MessageHash, aesKeyEncrypted);
+						m_key.setPayload(aes_payload);
+						logMessage("encrypted AES key payload (includes MessageHash), size " + aes_payload.length + "B");
+						
+						Log.v(TAG, "aes key payload out: " + ByteUtilities.bytesToHex(aes_payload));
+						
+						results.add(m_key);
 					
-					m.MessageType = (byte)MSGTYPE_ENCRYPTED_PAYLOAD & 0xFF;
-					m.setPayload(msgbytes);
-					
-					ApplicationMessage m_key = new ApplicationMessage();
-					
-					// get the fingerprint from the Friend object
-					m_key.RecipientFingerprint = m.RecipientFingerprint;
-					
-					// gotta give it a pre-determined messagetype to know this is an encryption key
-					m_key.MessageType = (byte)MSGTYPE_ENCRYPTED_KEY & 0xFF;
-					
-					// get the sending fingerprint from the main message
-					m_key.SenderFingerprint = m.SenderFingerprint;
-					
-					m_key.ApplicationIdentifier = "key_" + msg_signature;
-					
-					// the payload needs to include the encrypted key, and the orig msg's fingerprint
-					// if the hash is a certain size, then we can assume the rest of the message is the
-					// encrypted portion of the aes key
-					byte[] aes_payload = Bytes.concat(m.MessageHash, aesKeyEncrypted);
-					m_key.setPayload(aes_payload);
-					
-					Log.v(TAG, "aes key payload out: " + ByteUtilities.bytesToHex(aes_payload));
-					
-					results.add(m_key);
+					} else {
+						m.MessageType = (byte) MSGTYPE_PLAIN & 0xFF;
+						m.setPayload(msgbytes);
+					}
 				
-				} else {
-					m.MessageType = (byte) MSGTYPE_PLAIN & 0xFF;
-					m.setPayload(msgbytes);
-				}
-				
-				
-				
+				// add to outgoing messages
 				results.add(m);
+				i++;
 			}
 			
 		}
@@ -1034,7 +1083,8 @@ public class MainActivity extends Activity {
 			// map our messages hashes to our encryption keys
 			hashToKey.put(ByteUtilities.bytesToHex(hash), symmetric_key.getEncoded());
 		
-			Log.v("DOIT", "key is: " + ByteUtilities.bytesToHex(symmetric_key.getEncoded()));
+			//Log.v("DOIT", "key is: " + ByteUtilities.bytesToHex(symmetric_key.getEncoded()));
+			logMessage("decrypted key: " + ByteUtilities.bytesToHex(symmetric_key.getEncoded()));
 		} else {
 			Log.v("DOIT", "unable to store key");
 		}
@@ -1069,4 +1119,20 @@ public class MainActivity extends Activity {
 		
 	}
    
+	/**
+	 * A shortcut function to display messages in the main output feed
+	 * @param msg Message to show
+	 * @param level Debug level, where 0 only shows error messages and 1 includes informational messages
+	 */
+	private void logMessage(String msg) {		
+		statusLogText = statusLogText + "- " + msg + "\n";
+		runOnUiThread(new Runnable() {
+			  public void run() {
+				  statusText.setText(statusLogText);
+			  }
+		});
+	}
+
+	
+	
 }

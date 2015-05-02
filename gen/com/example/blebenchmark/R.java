@@ -36,6 +36,7 @@ public final class R {
         public static final int action_constants=0x7f0a0033;
         public static final int action_friends=0x7f0a002e;
         public static final int action_mark_unsent=0x7f0a0034;
+        public static final int action_msg_delete=0x7f0a0036;
         public static final int action_secret_combine=0x7f0a0035;
         public static final int action_settings=0x7f0a002d;
         public static final int action_show_msgs=0x7f0a0032;
@@ -114,6 +115,7 @@ public final class R {
         public static final int app_name=0x7f060000;
         public static final int be_a_friend=0x7f060005;
         public static final int caption_mark_unsent=0x7f06001f;
+        public static final int caption_msg_delete=0x7f060025;
         public static final int caption_secret_combine=0x7f060020;
         public static final int caption_show_combined_shares=0x7f06001c;
         public static final int caption_toggle=0x7f060023;

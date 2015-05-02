@@ -296,6 +296,14 @@ public class FriendsDb extends SQLiteOpenHelper {
         return mDb.update(MSGS_TABLE, args, criteria, null) > 0;
     }
 
+    // the message id from the database OBVIOUSLY doesn't match the message id for a message session
+    public boolean deleteMsg(long id) {
+        ContentValues args = new ContentValues();
+        String criteria = KEY_M_ROWID + " = " + String.valueOf(id);
+        
+        return mDb.delete(MSGS_TABLE, criteria, null) > 0;
+    }
+    
     
     public boolean updateToggleConstantByRow(long id) {
         

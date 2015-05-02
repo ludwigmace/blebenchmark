@@ -41,6 +41,8 @@
 	<string name="action_show_constants">Settings</string>
 	<string name="caption_toggle">Toggle</string>
 	<string name="messages_constants">Settings</string>
+	<string name="caption_msg_delete">Delete Message</string>
+	
 	
 	<string-array name="shares_total">
 	    <item>2</item>

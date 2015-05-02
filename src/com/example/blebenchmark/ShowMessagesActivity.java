@@ -114,6 +114,22 @@ public class ShowMessagesActivity extends Activity implements LoaderManager.Load
 			
 		}
 		
+		if (id == R.id.action_msg_delete) {
+			FriendsDb mDbHelper;
+			mDbHelper = new FriendsDb(getApplicationContext());
+			
+			boolean success = mDbHelper.deleteMsg(current_msg);
+			
+			if (success) {
+				showMessage("msg deleted");
+			} else {
+				showMessage("nothing happened");
+			}
+			
+			mDbHelper.close();
+			
+		}
+		
 		if (id == R.id.action_secret_combine) {
 			// pass in the current_msg id to pull the topic; then the topic to get all the shares to rebuild and display
 			String topicName = "";
