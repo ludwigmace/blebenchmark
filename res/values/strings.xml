@@ -6,6 +6,57 @@
     
     <string name="prompt_msg_size">MsgSize</string>
 
+	<string name="friends_add">Add Friend</string>
+	<string name="add_this_friend">Add!</string>
+    
+    <string name="be_a_friend">Advt</string>
+    <string name="find_a_friend">Scan</string>
+    <string name="msgs_push">Push</string>
+    <string name="msgs_pull">Pull</string>
+    <string name="action_friends">List Friends</string>
+    <string name="action_add_message">Add Message</string>
+    <string name="status_log">Status History:</string>
+    <string name="get_id">id&lt;-</string>
+    <string name="send_id">id-&gt;</string>
+	<string name="no_friends">nobody</string>
+	<string name="show_friends">Friends</string>
+	<string name="msgs_startpair">Pair</string>
+	<string name="friends_name">Your Friends</string>
+	<string name="message_add">Queue Up A Message</string>
+	<string name="queue_msg_btn">Queue Message</string>
+	<string name="caption_toggle_busy">Busy!</string>
+	<string name="chk_encrypt">Encrypt</string>
+	<string name="shares_msg">Create Threshold Msg</string>
+	<string name="prompt_shares_total">TOTAL</string>
+	<string name="prompt_shares_min">MINL</string>
+	<string name="action_add_deaddrops">Add Dead Drop Msg</string>
+	<string name="messages_showall">The Messages</string>
+	<string name="action_show_msgs">Show Messages</string>
+	<string name="caption_show_combined_shares">Show</string>
+	<string name="messages_showsecrets">Secrets</string>
+	<string name="action_show_secrets">Show Secrets</string>
+	<string name="caption_mark_unsent">Mark Unsent</string>
+	<string name="caption_secret_combine">Combine Shares</string>
+	<string name="gen_arbitary_msg">gen msg (bytes):</string>
+	<string name="action_show_constants">Settings</string>
+	<string name="caption_toggle">Toggle</string>
+	<string name="messages_constants">Settings</string>
+	
+	<string-array name="shares_total">
+	    <item>2</item>
+	    <item>3</item>
+	    <item>4</item>
+	    <item>5</item>
+	    <item>6</item>
+	</string-array>
+	
+	<string-array name="shares_min">
+	    <item>2</item>
+	    <item>3</item>
+	    <item>4</item>
+	    <item>5</item>
+	    <item>6</item>
+	</string-array>
 	
 	<string-array name="msg_size">
 	    <item>1 hB</item>

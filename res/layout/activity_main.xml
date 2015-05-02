@@ -41,7 +41,6 @@
 	        android:text="SHOW"
 	        android:onClick="handleButtonAdvertise"
 	        android:enabled="true" />
-
 	    
 	    <Button
 	        android:id="@+id/send"
@@ -49,6 +48,14 @@
 	        android:layout_height="wrap_content"
 	        android:text="SEND"
 	        android:onClick="handleButtonSend"
+	        android:enabled="true" />
+	    
+	    <Button
+	        android:id="@+id/getfile"
+	        android:layout_width="wrap_content"
+	        android:layout_height="wrap_content"
+	        android:text="PIC"
+	        android:onClick="handleButtonLoadPic"
 	        android:enabled="true" />
     
     </LinearLayout>
@@ -115,6 +122,22 @@
 	        android:text="-- message stop receive --" />
 
     </LinearLayout>
-        
+
+    <LinearLayout 
+    android:id="@+id/img" 
+    android:layout_height="wrap_content" 
+    android:layout_width="fill_parent"
+    android:orientation="vertical"
+    >
+
+        <ImageView
+            android:id="@+id/img_to_send"
+    		android:layout_height="wrap_content" 
+    		android:layout_width="wrap_content"
+    		/>
+            
+        	    
+</LinearLayout>
+    
     
 </LinearLayout>

@@ -10,6 +10,8 @@
     
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
 
@@ -28,9 +30,40 @@
             </intent-filter>
         </activity>
         
+		<activity
+	    	android:name=".AddFriendsActivity"
+	        android:label="@string/friends_add" >
+	    </activity>
+        
+        <activity
+            android:name=".FriendsActivity"
+            android:label="@string/friends_name" >
+        </activity>
+		
+        <activity
+            android:name=".AddMessageActivity"
+            android:label="@string/message_add" >
+        </activity>
+        
+		<activity
+            android:name=".ShowMessagesActivity"
+            android:label="@string/messages_showall" >
+        </activity>
+        
+	    <provider
+	       android:name="Friend"
+	       android:authorities="example.blebenchmark.friend"
+	       android:exported="false" />
+	    
+	    <provider
+	       android:name="Message"
+	       android:authorities="example.blebenchmark.message"
+	       android:exported="false" />
+        
 		<service android:name=".BleService" android:enabled="true" />
         
     </application>
+    
     
     
 
