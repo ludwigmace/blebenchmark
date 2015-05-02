@@ -7,16 +7,20 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
+import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.crypto.SecretKey;
+
 import com.google.common.io.ByteStreams;
 import com.google.common.primitives.Bytes;
 
 import simpble.BleApplicationPeer;
+import simpble.BlePeer;
 import simpble.ByteUtilities;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
@@ -86,6 +90,9 @@ public class MainActivity extends Activity {
     private Map<String, String> addressesToFriends;
     private Map <String, BleApplicationPeer> bleFriends;  // folks whom i have previously connected to, or i have their id info
     
+    private Map<String, byte[]> hashToKey;
+    private Map<String, byte[]> hashToPayload;
+    
     KeyStuff rsaKey;
     
 	@Override
@@ -96,6 +103,14 @@ public class MainActivity extends Activity {
 		// get a handle to our database
 		dB = new FriendsDb(this);
 		ctx = this;
+		
+		if (hashToKey == null) {
+			hashToKey = new HashMap<String,byte[]>();
+		}
+
+		if (hashToPayload == null) {
+			hashToPayload = new HashMap<String, byte[]>();
+		}
 		
 		addressesToFriends = new HashMap<String, String>();
 		
@@ -175,7 +190,7 @@ public class MainActivity extends Activity {
             	
             	if (buddy != null) {
             	
-	    			byte[] payload = extras.getByteArray("MSG_PAYLOAD");
+	    			byte[] rawPayload = extras.getByteArray("MSG_PAYLOAD");
 	    			
 	    			final String remoteAddress = extras.getString("REMOTE_ADDR");
 	    			final int parentMessageId = extras.getInt("PARENT_MSG_ID");
@@ -183,7 +198,7 @@ public class MainActivity extends Activity {
 	    			
 	    			// create a new ApplicationMessage object and build its properties
 	    			ApplicationMessage incomingMsg = new ApplicationMessage();
-	    			String incomingDigest = incomingMsg.SetRawBytes(payload);
+	    			String incomingDigest = incomingMsg.SetRawBytes(rawPayload);
 
 	    			incomingMsg.BuildMessageDetails();
 	    			
@@ -216,30 +231,132 @@ public class MainActivity extends Activity {
 		    				intact = "bad";
 		    			}
 		    			
-		    			messageDetails.setText("rcvd msg " + parentMessageId + ", " + payload.length + " bytes, " + m.IncompleteReceives + " retries, " +  intact);
+		    			messageDetails.setText("rcvd msg " + parentMessageId + ", " + rawPayload.length + " bytes, " + m.IncompleteReceives + " retries, " +  intact);
 		    			stopReceive.setText("msg received in " + duration + " seconds");
 		    			
 		    			switch (mt) {
-						case MSGTYPE_ID:
-							// if the sender is in our friends list
-							if (bleFriends.containsKey(senderFingerprint)) {
+							case MSGTYPE_ID:
 								
-								// we need to be able to look this person up by incoming address
-								addressesToFriends.put(remoteAddress, senderFingerprint);
-			
-							} else {  // if we actually care who this person is, then store their FP
-								//logMessage("a: this guy's FP isn't known to me: " + senderFingerprint.substring(0,20));
+								// if the sender is in our friends list
+								if (bleFriends.containsKey(senderFingerprint)) {
+									
+									// we need to be able to look this person up by incoming address
+									addressesToFriends.put(remoteAddress, senderFingerprint);
+									buddy.Fingerprint = senderFingerprint;
+				
+								} else {  
+									
+									// if we actually care who this person is, then store their FP
+							        Intent i = new Intent(ctx, AddFriendsActivity.class);
+							        i.putExtra("fp", senderFingerprint);
+							        i.putExtra("puk", messagePayload);
+							        startActivityForResult(i, ACTIVITY_CREATE);
+														
+								}
 								
-						        Intent i = new Intent(ctx, AddFriendsActivity.class);
-						        i.putExtra("fp", senderFingerprint);
-						        i.putExtra("puk", messagePayload);
-						        startActivityForResult(i, ACTIVITY_CREATE);
-													
-						        // TODO: add back to addressesToFriends
-							}
+								break;
+								
+							case MSGTYPE_ENCRYPTED_PAYLOAD:
+								
+								// payload might be padded with zeroes, strip out trailing null bytes
+								messagePayload = ByteUtilities.trimmedBytes(messagePayload);
+								
+								// load this payload into our hash to payload lookup
+								hashToPayload.put(ByteUtilities.bytesToHex(messageHash), messagePayload);
+				
+								Log.v("DOIT", "encrypted payload: " + ByteUtilities.bytesToHex(messagePayload));
+								
+								byte[] aesKeyBytes = hashToKey.get(ByteUtilities.bytesToHex(messageHash));
+								
+								if (aesKeyBytes != null) {
+								
+									// if we have a key for this thing already, decrypt and display messages
+									byte[] decryptedPayload = null;
+								
+									AESCrypt aes = null;
+									try {
+										byte[] iv = Arrays.copyOf(messagePayload, 16);
+										aes = new AESCrypt(aesKeyBytes, iv);
+										
+									} catch (Exception e) {
+										Log.v(TAG, "couldn't create AESCrypt class with String(aesKeyBytes):" + e.getMessage());
+									}
+								
+									try {
+										messagePayload = Arrays.copyOfRange(messagePayload, 16, messagePayload.length);
+										decryptedPayload = aes.decrypt(messagePayload);
+									} catch (Exception e) {
+										Log.v(TAG, "couldn't decrypt payload:" + e.getMessage());
+									}
+									
+									if (decryptedPayload != null) {
+										String msgtext = new String(ByteUtilities.trimmedBytes(decryptedPayload));
+										Log.v(TAG, "decrypted: " + msgtext);
+									} else {
+										Log.v(TAG, "empty decrypted payload!");
+									}
+									
+									
+								} else {
+									Log.v(TAG, "a: no key for this message!");
+									Log.v(TAG, "no key for this message!");
+								}
+								
+								break;
+								
+							case MSGTYPE_ENCRYPTED_KEY:
+								messagePayload = ByteUtilities.trimmedBytes(messagePayload);
+								
+								Log.v(TAG, "aes key payload in: " + ByteUtilities.bytesToHex(messagePayload));
+								
+								byte[] incomingMessageHash = processIncomingKeyMsg(messagePayload);
+				
+								byte[] encryptedPayload = hashToPayload.get(ByteUtilities.bytesToHex(incomingMessageHash));
+								
+								if (encryptedPayload != null ) {
+									Log.v(TAG, "found encrypted payload for the key we just got");
+									// now decrypt!
+								} else {
+									Log.v(TAG, "NO encrypted payload found for this new key");
+								}
+								
+								break;
 							
-							
-							break;
+							case MSGTYPE_DROP:
+								
+								// this can be for topics; but need to differentiate if bytes or not
+								String topic_name = "";
+								messagePayload = ByteUtilities.trimmedBytes(messagePayload);
+								
+								try {
+									// since the fingerprint was passed in as a hex string, convert it to bytes, and then build a string
+									topic_name = new String(ByteUtilities.trimmedBytes(ByteUtilities.hexToBytes(recipientFingerprint)));
+
+								} catch (Exception x) {
+									Log.v(TAG, "couldn't parse drop msg bytes into string");
+								}
+								// payload is missing the first 6 bytes
+								String msgSignature = ByteUtilities.digestAsHex(new String (messagePayload) + "topic" + topic_name);
+								
+								long storedMsgId = -1;
+								
+								storedMsgId = dB.queueMsg(topic_name, new String (messagePayload), "topic", msgSignature);
+								
+								if (recipientFingerprint.equalsIgnoreCase(myFingerprint)) {
+									Log.v(TAG, "message is for us (as follows, next line):");
+									Log.v(TAG, new String(messagePayload));
+								} else {
+									Log.v(TAG, "message isn't for us");
+								}
+								
+								Log.v(TAG, "stored msg: " + String.valueOf(storedMsgId));
+								
+								break;
+								
+							default:
+								Log.v(TAG, "received msg of unknown type " + mt);
+								
+								
 		    			}
 		    			
 		    			
@@ -547,40 +664,37 @@ public class MainActivity extends Activity {
 	}
 	
 	public void handleButtonSend(View v) {
-	
-		String msgSize = String.valueOf(spinMessageSize.getSelectedItem());
 		
-		String msgUnits = msgSize.substring(msgSize.length()-2);
-		int msgUnitCount = Integer.parseInt(msgSize.substring(0, msgSize.length()-3));
-		
-		int byteSize = 0;
-		
-		if (msgUnits.equalsIgnoreCase("MB")) {
-			byteSize = msgUnitCount * 1000000;
-		} else if (msgUnits.equalsIgnoreCase("kB")) {
-			byteSize = msgUnitCount * 1000;
-		} else if (msgUnits.equalsIgnoreCase("hB")) {
-			byteSize = msgUnitCount * 100;
-		}
-		
-		if (byteSize > 0) {
-		
-			//byte[] newMsg = GenerateMessage(byteSize);
-			byte[] newMsg = identityMessage().GetAllBytes(); // send an identity message instead
+		for (Map.Entry<String, BenchBuddy> entry : benchBuddies.entrySet()) {
 			
-			String remoteAddress = benchBuddies.keySet().iterator().next();
+			String remoteAddress = entry.getKey();
+			BenchBuddy b = entry.getValue();
 			
-			String result = simpBleService.SendMessage(remoteAddress, newMsg);
-			
-			if (result == null) {
-				Log.v(TAG, "no message queued to send");
-			} else {
-				Log.v(TAG, "message queued to send w/ id " + result);
+			// if you haven't sent an id message yet, do it now
+			if (!b.IdentitySent) {
+				byte[] newMsg = identityMessage().GetAllBytes(); // send an identity message
+				String result = simpBleService.SendMessage(remoteAddress, newMsg);
+				b.IdentitySent = true;
+				Log.v(TAG, "queued up id message for " + remoteAddress);
 			}
-		
-		} else {
-			Log.v(TAG, "byte size 0");
+			
+			if (b.Fingerprint != null) {
+				int i = 0;
+				ArrayList<ApplicationMessage> friendMessages = GetMessagesForFriend(b.Fingerprint);
+				
+				// queue up all the messages we've got for this dude
+				for (ApplicationMessage m : friendMessages) {
+					String result = simpBleService.SendMessage(remoteAddress, m.GetAllBytes());
+					i++;
+				}
+				Log.v(TAG, "queued up " + i + " messages for fp " + b.Fingerprint);
+			}
+			
+			
+			
 		}
+		
+		
 		
 	}
 	
@@ -857,6 +971,53 @@ public class MainActivity extends Activity {
 		}
 		
 		return results;
+		
+	}
+	
+	/** Takes an incoming byte array of an RSA wrapped AES key and unwraps it, storing the AES key 
+	 * and hash of the corresponding encrypted message in the hashToKey Map and returning
+	 * the aforementioned hash.
+	 * 
+	 * @param keyPayload Byte array where the first 16 bytes are a hash of the plaintext of an encrypted message
+	 * and the remaining bytes are the wrapped key.
+	 * @return
+	 */
+	public byte[] processIncomingKeyMsg(byte[] keyPayload) {
+		
+		//keyPayload = Bytes.concat(m.MessageHash, aesKeyEncrypted);
+		// first 15 bytes are the hash that corresponds to the encrypted msg this key is for
+		// aesKey
+		
+		Log.v(TAG, "incoming key payload bytes:" + ByteUtilities.bytesToHex(keyPayload));
+		
+		// read in the hash of the originating message
+		byte[] hash = Arrays.copyOfRange(keyPayload, 0, 15);
+		byte[] encrypted_key = Arrays.copyOfRange(keyPayload, 15, 256+15);
+		
+		Log.v(TAG, "encrypted_key length is: " + String.valueOf(encrypted_key.length));
+		Log.v(TAG, "key bytes are: " + ByteUtilities.bytesToHex(encrypted_key));
+		
+		// let's decrypt the key so we can unlock the other message
+		SecretKey symmetric_key = null;
+		
+		try {
+			symmetric_key = rsaKey.unwrap(encrypted_key);
+		} catch (GeneralSecurityException e) {
+			Log.v(TAG, e.getMessage());
+			Log.v(TAG, "can't unwrap the key");
+		}
+		
+		if (symmetric_key != null) {
+			// map our messages hashes to our encryption keys
+			hashToKey.put(ByteUtilities.bytesToHex(hash), symmetric_key.getEncoded());
+		
+			Log.v("DOIT", "key is: " + ByteUtilities.bytesToHex(symmetric_key.getEncoded()));
+		} else {
+			Log.v("DOIT", "unable to store key");
+		}
+		
+		return hash;
+		
 		
 	}
    
