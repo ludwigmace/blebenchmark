@@ -65,6 +65,9 @@ public class MainActivity extends Activity {
 	Button btnScan;
 	RadioButton btnNotify;
 	RadioButton btnIndicate;
+	TextView textFP;
+	
+	
 
 	Context ctx;
 	
@@ -104,6 +107,8 @@ public class MainActivity extends Activity {
 		dB = new FriendsDb(this);
 		ctx = this;
 		
+		peripheralTransportMode = "notify";
+		
 		if (hashToKey == null) {
 			hashToKey = new HashMap<String,byte[]>();
 		}
@@ -115,7 +120,7 @@ public class MainActivity extends Activity {
 		addressesToFriends = new HashMap<String, String>();
 		
 		
-		imageToSend = (ImageView) findViewById(R.id.img_to_send);
+		//imageToSend = (ImageView) findViewById(R.id.img_to_send);
 		
 		textBanner = (TextView) findViewById(R.id.banner);
 		btnSend = (Button) findViewById(R.id.send);
@@ -123,9 +128,11 @@ public class MainActivity extends Activity {
 		btnAdvertise = (Button) findViewById(R.id.advert);
 		btnScan = (Button) findViewById(R.id.search);
 		
+		/*
 		btnNotify = (RadioButton) findViewById(R.id.radio_notify);
 		btnIndicate = (RadioButton) findViewById(R.id.radio_indicate);
-		
+		*/
+		textFP = (TextView) findViewById(R.id.myfingerprint);
 		
 		startReceive = (TextView) findViewById(R.id.msg_start_receive);
 		stopReceive = (TextView) findViewById(R.id.msg_stop_receive);
@@ -134,7 +141,7 @@ public class MainActivity extends Activity {
         Intent simpBleIntent = new Intent(this, BleService.class);
         bindService(simpBleIntent, mServiceConnection, BIND_AUTO_CREATE);
         
-        spinMessageSize = (Spinner) findViewById(R.id.msg_size);
+        //spinMessageSize = (Spinner) findViewById(R.id.msg_size);
         
         // get an identifier for this installation
         String myIdentifier = Installation.id(this, false);
@@ -144,6 +151,18 @@ public class MainActivity extends Activity {
         
 		try {
 			rsaKey = new KeyStuff(this, myIdentifier);
+			
+			String myFP = ByteUtilities.bytesToHex(rsaKey.PuFingerprint());
+			
+			String readableFp = "";
+			
+			for (int i = 0; i < 16; i=i+2) {
+				readableFp = readableFp + ":" + myFP.substring(i, i+2);
+			}
+			
+			readableFp = readableFp.substring(1);
+			
+			textFP.setText("Your Fingerprint: " + readableFp);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -154,12 +173,12 @@ public class MainActivity extends Activity {
 		benchBuddies = new HashMap<String, BenchBuddy>();
 		
 		PopulateFriends(); // pull our existing friends from the database
-		
+		/*
 		if (!(btnNotify.isChecked() || btnIndicate.isChecked())) {
 			btnNotify.setChecked(true);
 			peripheralTransportMode = "notify";
 		}
-		
+		*/
 		
 	}
     
@@ -469,6 +488,9 @@ public class MainActivity extends Activity {
                 	final int parent_msgid = extras.getInt("PARENT_MSG_ID");
                 	final String msg_hash = extras.getString("MSG_HASH");
                 	
+                	Log.v(TAG, "mark msg " + msg_hash + " as sent");
+                	MarkMsgSent(msg_hash, remote_addr);
+                	
                 	setBanner("msg " + String.valueOf(parent_msgid) + " delivered to " + remote_addr);
                 } else {
                 	setBanner("new msg, extras null");
@@ -551,6 +573,7 @@ public class MainActivity extends Activity {
         simpBleService = null;
     }
 	
+    /*
 	public void onRadioButtonClicked(View v) {
 		boolean checked = ((RadioButton) v).isChecked();
 		
@@ -570,7 +593,7 @@ public class MainActivity extends Activity {
 		
 		simpBleService.SetPeripheralTransportMode(peripheralTransportMode);
 		
-	}
+	}*/
     
     
 	
@@ -1018,6 +1041,31 @@ public class MainActivity extends Activity {
 		
 		return hash;
 		
+		
+	}
+	
+	/**
+	 * Update the messages table with the fingerprint of the person to whom you sent this message
+	 * 
+	 * @param msg_content Content of the message
+	 * @param msgtype Type of message, as a string
+	 * @param peerIndex remote address for this peer
+	 */
+	public void MarkMsgSent(String messageSignature, String peerIndex) {
+		
+		// look up your friend's fingerprint based on the index provided earlier by BleMessenger
+		String fp = addressesToFriends.get(peerIndex);
+		
+		// update as sent using the messageSignature to identify
+		boolean updated = dB.updateMsgSent(messageSignature, fp);
+		
+		if (updated) {
+			if (messageSignature.length() > 8) {
+				Log.v(TAG, "dbupdate as sent: " + messageSignature.substring(0,8));
+			} else {
+				Log.v(TAG, "dbupdate as sent: " + messageSignature);
+			}
+		}
 		
 	}
    

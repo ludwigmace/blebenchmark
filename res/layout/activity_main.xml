@@ -10,6 +10,23 @@
     tools:context="com.example.blebenchmark.MainActivity">
 
     <LinearLayout 
+    android:id="@+id/idstuff" 
+    android:layout_height="wrap_content" 
+    android:layout_width="fill_parent"
+    android:orientation="vertical"
+    >
+
+	    <TextView
+	        android:id="@+id/myfingerprint"
+	        android:layout_width="match_parent"
+	        android:layout_height="wrap_content"
+	        android:text="" />
+	
+	</LinearLayout>
+        
+    
+    
+    <LinearLayout 
     android:id="@+id/toprow_control" 
     android:layout_height="wrap_content" 
     android:layout_width="fill_parent">
@@ -50,6 +67,7 @@
 	        android:onClick="handleButtonSend"
 	        android:enabled="true" />
 	    
+	    <!-- 
 	    <Button
 	        android:id="@+id/getfile"
 	        android:layout_width="wrap_content"
@@ -57,9 +75,10 @@
 	        android:text="PIC"
 	        android:onClick="handleButtonLoadPic"
 	        android:enabled="true" />
+	         -->
     
     </LinearLayout>
-    
+    <!-- 
         <LinearLayout 
     android:id="@+id/test_parameters" 
     android:layout_height="wrap_content" 
@@ -94,7 +113,7 @@
             android:prompt="@string/prompt_msg_size" />
 	        
 	    </LinearLayout>
-	    
+	     -->
     <LinearLayout 
     android:id="@+id/bench_output" 
     android:layout_height="wrap_content" 
@@ -123,6 +142,22 @@
 
     </LinearLayout>
 
+	<LinearLayout 
+    android:id="@+id/status_text" 
+    android:layout_height="fill_parent" 
+    android:layout_width="fill_parent">
+	    
+            
+	    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="fill_parent"
+        android:id="@+id/status_log"
+        android:text="@string/status_log"
+        android:textIsSelectable="true" />
+
+	    
+    </LinearLayout>
+    <!-- 
     <LinearLayout 
     android:id="@+id/img" 
     android:layout_height="wrap_content" 
@@ -138,6 +173,6 @@
             
         	    
 </LinearLayout>
-    
+     -->
     
 </LinearLayout>
