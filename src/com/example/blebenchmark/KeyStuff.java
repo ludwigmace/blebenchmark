@@ -117,7 +117,6 @@ public class KeyStuff {
 			e.printStackTrace();
 		}
         
-        // i want my digest to be the packet size less the 2 bytes needed for counter and size
         byte[] myF = md.digest(this.PublicKey());
     	
     	return myF;

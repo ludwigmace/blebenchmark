@@ -685,6 +685,11 @@ public class MainActivity extends Activity {
 			return true;
 		}
 		
+		if (id == R.id.action_add_deaddrops) {
+	        Intent i = new Intent(this, AddShamirActivity.class);
+	        startActivityForResult(i, ACTIVITY_CREATE);
+		}
+		
 		if (id == R.id.action_add_message) {
 	        Intent i = new Intent(this, AddMessageActivity.class);
 	        startActivityForResult(i, ACTIVITY_CREATE);
@@ -975,8 +980,10 @@ public class MainActivity extends Activity {
 						if (aes != null) {
 							
 							try {
+								logMessage("encryption started at "+ System.currentTimeMillis());
 								// prepend the initialization vector to the encrypted payload
 								msgbytes = Bytes.concat(iv, aes.encrypt(msg_content.getBytes()));
+								logMessage("encryption ended at "+ System.currentTimeMillis());
 								logMessage("encrypted msg w/ prepended IV, size " + msgbytes.length + "B");
 							} catch (Exception x) {
 								Log.v(TAG, "encrypt error: " + x.getMessage());
@@ -985,9 +992,10 @@ public class MainActivity extends Activity {
 							if (msgbytes != null) {
 								// encrypt our encryption key using our recipient's public key 							
 								try {
+									logMessage("key encryption started at "+ System.currentTimeMillis());
 									aesKeyEncrypted = aes.encryptedSymmetricKey(puk);
-									logMessage("AES key encrypted, size " + aesKeyEncrypted.length + "B, first 32B: " + ByteUtilities.bytesToHex(Arrays.copyOf(aesKeyEncrypted, 32)));
-									Log.v(TAG, "encrypted aes key: " + ByteUtilities.bytesToHex(aesKeyEncrypted));
+									logMessage("AES key encrypted at " + System.currentTimeMillis() + ", size " + aesKeyEncrypted.length + "B, first 32B: " + ByteUtilities.bytesToHex(Arrays.copyOf(aesKeyEncrypted, 32)));
+									//Log.v(TAG, "encrypted aes key: " + ByteUtilities.bytesToHex(aesKeyEncrypted));
 								} catch (Exception e) {
 									Log.v(TAG, "couldn't encrypt aes key");	
 								}
@@ -1073,7 +1081,9 @@ public class MainActivity extends Activity {
 		SecretKey symmetric_key = null;
 		
 		try {
+			logMessage("begin unwrapping key at " + System.currentTimeMillis());
 			symmetric_key = rsaKey.unwrap(encrypted_key);
+			logMessage("completed unwrapping key at " + System.currentTimeMillis());
 		} catch (GeneralSecurityException e) {
 			Log.v(TAG, e.getMessage());
 			Log.v(TAG, "can't unwrap the key");
