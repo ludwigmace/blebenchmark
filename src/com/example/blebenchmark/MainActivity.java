@@ -88,9 +88,7 @@ public class MainActivity extends Activity {
     private String peripheralTransportMode;
 
     private Map<String, BenchBuddy> benchBuddies;
-    
-    private long MessageSize;
-    
+        
     private static final int ACTIVITY_CREATE=0;
     
     private FriendsDb dB;
@@ -100,6 +98,8 @@ public class MainActivity extends Activity {
     
     private Map<String, byte[]> hashToKey;
     private Map<String, byte[]> hashToPayload;
+    
+    private Map<String, String> queuedMessageMap;
     
     KeyStuff rsaKey;
     
@@ -128,6 +128,10 @@ public class MainActivity extends Activity {
 		// get a handle to our database
 		dB = new FriendsDb(this);
 		ctx = this;
+		
+		if (queuedMessageMap == null) {
+			queuedMessageMap = new HashMap<String, String>();
+		}
 		
 		if (statusLogText == null) {
 			statusLogText = "";
@@ -523,8 +527,9 @@ public class MainActivity extends Activity {
                 	final int parent_msgid = extras.getInt("PARENT_MSG_ID");
                 	final String msg_hash = extras.getString("MSG_HASH");
                 	
-                	Log.v(TAG, "mark msg " + msg_hash + " as sent");
-                	MarkMsgSent(msg_hash, remote_addr);
+                	final String msgSignature = queuedMessageMap.get(msg_hash);
+                	
+                	MarkMsgSent(msgSignature, remote_addr);
                 	
                 	setBanner("msg " + String.valueOf(parent_msgid) + " delivered to " + remote_addr);
                 } else {
@@ -733,10 +738,12 @@ public class MainActivity extends Activity {
 			String remoteAddress = entry.getKey();
 			BenchBuddy b = entry.getValue();
 			
+			String queuedMessageDigest = "";
+			
 			// if you haven't sent an id message yet, do it now
 			if (!b.IdentitySent) {
 				byte[] newMsg = identityMessage().GetAllBytes(); // send an identity message
-				String result = simpBleService.SendMessage(remoteAddress, newMsg);
+				simpBleService.SendMessage(remoteAddress, newMsg);
 				b.IdentitySent = true;
 				Log.v(TAG, "queued up id message for " + remoteAddress);
 			}
@@ -746,11 +753,25 @@ public class MainActivity extends Activity {
 				ArrayList<ApplicationMessage> friendMessages = GetMessagesForFriend(b.Fingerprint);
 				
 				// queue up all the messages we've got for this dude
+				
 				for (ApplicationMessage m : friendMessages) {
-					String result = simpBleService.SendMessage(remoteAddress, m.GetAllBytes());
+					queuedMessageDigest = simpBleService.SendMessage(remoteAddress, m.GetAllBytes());
+					queuedMessageMap.put(queuedMessageDigest, m.ApplicationIdentifier);
+
 					i++;
 				}
+				
 				Log.v(TAG, "queued up " + i + " messages for fp " + b.Fingerprint);
+				
+				ApplicationMessage m1 = GetUnsentEligibleTopicMessage(b.Fingerprint);
+				
+				if (m1 != null) {
+					queuedMessageDigest = simpBleService.SendMessage(remoteAddress, m1.GetAllBytes());
+					queuedMessageMap.put(queuedMessageDigest, m1.ApplicationIdentifier);
+					logMessage("adding topic msg " + queuedMessageDigest + " - " + m1.ApplicationIdentifier);
+				}
+				
+				
 			}
 			
 			
@@ -1143,6 +1164,55 @@ public class MainActivity extends Activity {
 		});
 	}
 
+
+	/**
+	 * Returns a secret message share for any topic that this person hasn't received a share for yet
+	 * 
+	 * @param candidateFingerprint The PukFP of the person we're ensure only gets a single share of a particular topic
+	 * @return A message in a BleMessage object 
+	 */
+	private ApplicationMessage GetUnsentEligibleTopicMessage(String candidateFingerprint) {
+		
+		// topic messages eligible to go to this recipient
+		Cursor c = dB.topicsNotSentToRecipient(candidateFingerprint);
+		
+		ApplicationMessage m = null; 
+		
+		if (c.getCount() > 0) {
+			c.moveToFirst();
+			
+			// found an eligible message in the database, so build it for the application
+			m = new ApplicationMessage();
+			
+			String recipient_name = c.getString(c.getColumnIndex(FriendsDb.KEY_M_FNAME));
+			String msg_content = c.getString(c.getColumnIndex(FriendsDb.KEY_M_CONTENT));
+			//String msg_type = c.getString(c.getColumnIndex(FriendsDb.KEY_M_MSGTYPE));
+			String msg_signature = c.getString(c.getColumnIndex(FriendsDb.KEY_M_MSGID));
+			
+			if (msg_signature == null) {
+				msg_signature = "";
+			}
+	
+			byte[] anonFP;
+			anonFP = new byte[20];
+			Arrays.fill(anonFP, (byte) 0);
+			
+			byte[] rfp = new byte[20];
+			rfp = Arrays.copyOf(recipient_name.getBytes(), 20);
+			m.RecipientFingerprint = rfp;
+			m.SenderFingerprint = anonFP;
+			m.MessageType = (byte)(MSGTYPE_DROP & 0xFF);
+			m.setPayload(msg_content.getBytes());
+			m.ApplicationIdentifier = msg_signature;
+			
+			m.SetSignature(msg_signature);
+
+			
+		}
+		
+		return m;
+
+	}
 	
 	
 }
